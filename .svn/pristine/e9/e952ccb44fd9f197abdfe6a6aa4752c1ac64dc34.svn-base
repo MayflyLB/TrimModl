@@ -1,0 +1,210 @@
+
+#include "EditTrimCurves.hpp"
+using namespace NXOpen;
+using namespace NXOpen::BlockStyler;
+
+
+Session *(EditTrimCurves::theSession) = NULL;
+UI *(EditTrimCurves::theUI) = NULL;
+
+EditTrimCurves::EditTrimCurves()
+{
+    try
+    {
+        m_implEdit = nullptr;
+        EditTrimCurves::theSession = NXOpen::Session::GetSession();
+        EditTrimCurves::theUI = UI::GetUI();
+        theDlxFileName = "EditTrimCurves.dlx";
+        theDialog = EditTrimCurves::theUI->CreateDialog(theDlxFileName);
+        theDialog->AddApplyHandler(make_callback(this, &EditTrimCurves::apply_cb));
+        theDialog->AddOkHandler(make_callback(this, &EditTrimCurves::ok_cb));
+        theDialog->AddUpdateHandler(make_callback(this, &EditTrimCurves::update_cb));
+        theDialog->AddInitializeHandler(make_callback(this, &EditTrimCurves::initialize_cb));
+        theDialog->AddDialogShownHandler(make_callback(this, &EditTrimCurves::dialogShown_cb));
+        INIT_ABS_CSYS();
+    }
+    catch(exception&)
+    {
+        throw;
+    }
+}
+
+EditTrimCurves::~EditTrimCurves()
+{
+    if (theDialog != NULL)
+    {
+        TERM_ABS_CSYS();
+        delete theDialog;
+        theDialog = NULL;
+    }
+}
+
+void EditTrimCurves::initialize_cb()
+{
+    try
+    {
+        groupGernate = dynamic_cast<NXOpen::BlockStyler::Group*>(theDialog->TopBlock()->FindBlock("groupGernate"));
+        curvesSelect = dynamic_cast<NXOpen::BlockStyler::CurveCollector*>(theDialog->TopBlock()->FindBlock("curvesSelect"));
+        cutDir = dynamic_cast<NXOpen::BlockStyler::SpecifyVector*>(theDialog->TopBlock()->FindBlock("cutDir"));
+        generateDir = dynamic_cast<NXOpen::BlockStyler::SpecifyVector*>(theDialog->TopBlock()->FindBlock("generateDir"));
+        assistSelect = dynamic_cast<NXOpen::BlockStyler::CurveCollector*>(theDialog->TopBlock()->FindBlock("assistSelect"));
+        DeleteButton = dynamic_cast<NXOpen::BlockStyler::Button*>(theDialog->TopBlock()->FindBlock("DeleteButton"));
+        manipulator = dynamic_cast<NXOpen::BlockStyler::SpecifyOrientation*>(theDialog->TopBlock()->FindBlock("Manipulator"));
+        buttonDirType = dynamic_cast<NXOpen::BlockStyler::Button*>(theDialog->TopBlock()->FindBlock("buttonDirType"));
+        if (m_implEdit)
+        {
+            delete m_implEdit;
+            m_implEdit = nullptr;
+        }
+        else
+        {
+            m_implEdit = new ImplEditCurves();
+        }
+    }
+    catch(exception& ex)
+    {
+        EditTrimCurves::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+    }
+}
+
+int EditTrimCurves::update_cb(NXOpen::BlockStyler::UIBlock* block)
+{
+    try
+    {
+        if(block == curvesSelect) { }
+        else if(block == assistSelect)
+        {
+        }  
+        else if(block == cutDir)
+        {
+            m_implEdit->doOper(curvesSelect, cutDir);
+            
+            NXOpen::Point3d origin_;
+            manipulator->SetEnable(true);
+            manipulator->SetOrigin(origin_);
+            origin_.X = 1;
+            manipulator->SetXAxis((Vector3d)origin_);
+            origin_.X = 0;
+            origin_.Y = 1;
+            manipulator->SetYAxis((Vector3d)origin_);
+            cutDir->SetShow(false);
+            curvesSelect->SetShow(false);
+            assistSelect->Focus();
+        }
+        else if(block == manipulator)
+        {
+            NXOpen::Point3d &&temp=manipulator->Origin();
+            
+        }
+        else if(block == buttonDirType)
+        {
+
+        }
+    }
+    catch(exception& ex)
+    {
+        EditTrimCurves::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+    }
+    return 0;
+}
+
+int EditTrimCurves::apply_cb()
+{
+    int errorCode = 0;
+    try
+    {
+        if (m_implEdit)
+        {
+            delete m_implEdit;
+            m_implEdit = nullptr;
+        }
+    }
+    catch(exception& ex)
+    {
+        errorCode = 1;
+        EditTrimCurves::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+    }
+    return errorCode;
+}
+
+int EditTrimCurves::Show()
+{
+    try
+    {
+        theDialog->Show();
+    }
+    catch (exception& ex)
+    {
+        EditTrimCurves::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+    }
+    return 0;
+}
+
+void EditTrimCurves::dialogShown_cb()
+{
+    try
+    {
+
+    }
+    catch(exception& ex)
+    {
+
+        EditTrimCurves::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+    }
+}
+
+int EditTrimCurves::ok_cb()
+{
+    int errorCode = 0;
+    try
+    {
+        errorCode = apply_cb();
+    }
+    catch(exception& ex)
+    {
+        errorCode = 1;
+        EditTrimCurves::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+    }
+    return errorCode;
+}
+
+PropertyList* EditTrimCurves::GetBlockProperties(const char *blockID)
+{
+    return theDialog->GetBlockProperties(blockID);
+}
+
+extern "C" DllExport void  ufusr(char *param, int *retcod, int param_len)
+{
+    EditTrimCurves *theEditTrimCurves = NULL;
+    try
+    {
+        theEditTrimCurves = new EditTrimCurves();
+        theEditTrimCurves->Show();
+    }
+    catch (exception& ex)
+    {
+        EditTrimCurves::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+    }
+    if (theEditTrimCurves != NULL)
+    {
+        delete theEditTrimCurves;
+        theEditTrimCurves = NULL;
+    }
+}
+
+extern "C" DllExport int ufusr_ask_unload()
+{
+    return (int)Session::LibraryUnloadOptionImmediately;
+}
+
+extern "C" DllExport void ufusr_cleanup(void)
+{
+    try
+    {
+
+    }
+    catch (exception& ex)
+    {
+        EditTrimCurves::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+    }
+}

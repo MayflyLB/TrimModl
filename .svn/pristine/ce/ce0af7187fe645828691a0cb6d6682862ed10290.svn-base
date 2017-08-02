@@ -1,0 +1,976 @@
+
+#include "DownSteelInsertTrimming.hpp"
+using namespace NXOpen;
+using namespace NXOpen::BlockStyler;
+
+const char TOOL_LOCAL_QUENCH_TYPE[] = "局部淬火结构";
+const char TOOL_ENTIRE_QUENCH_TYPE[] = "整体淬火结构";
+const double tempD[3] = { 0 };
+Session *(ScrapSteelInsertTrimming::theSession) = NULL;
+UI *(ScrapSteelInsertTrimming::theUI) = NULL;
+
+ScrapSteelInsertTrimming::ScrapSteelInsertTrimming()
+{
+	try
+	{
+		// Initialize the NX Open C++ API environment
+		ScrapSteelInsertTrimming::theSession = NXOpen::Session::GetSession();
+		ScrapSteelInsertTrimming::theUI = UI::GetUI();
+		theDlxFileName = "DownSteelInsertTrimming.dlx";
+		theDialog = ScrapSteelInsertTrimming::theUI->CreateDialog(theDlxFileName);
+		// Registration of callback functions
+		theDialog->AddApplyHandler(make_callback(this, &ScrapSteelInsertTrimming::apply_cb));
+		theDialog->AddOkHandler(make_callback(this, &ScrapSteelInsertTrimming::ok_cb));
+		theDialog->AddUpdateHandler(make_callback(this, &ScrapSteelInsertTrimming::update_cb));
+		theDialog->AddInitializeHandler(make_callback(this, &ScrapSteelInsertTrimming::initialize_cb));
+		theDialog->AddDialogShownHandler(make_callback(this, &ScrapSteelInsertTrimming::dialogShown_cb));
+	}
+	catch (exception& ex)
+	{
+		//---- Enter your exception handling code here -----
+		ScrapSteelInsertTrimming::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+		throw;
+	}
+}
+
+ScrapSteelInsertTrimming::~ScrapSteelInsertTrimming()
+{
+	if (theDialog != NULL)
+	{
+		UF_initialize();
+		UF_CSYS_set_wcs(curr_sys);
+		UF_OBJ_delete_object(csys_id);
+		
+		UF_terminate();
+		delete theDialog;
+		theDialog = NULL;
+	}
+}
+
+int ScrapSteelInsertTrimming::Show()
+{
+	try
+	{
+		theDialog->Show();
+	}
+	catch (exception& ex)
+	{
+		//---- Enter your exception handling code here -----
+		ScrapSteelInsertTrimming::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+	}
+	return 0;
+}
+
+void ScrapSteelInsertTrimming::initialize_cb()
+{
+	try
+	{
+		group = dynamic_cast<NXOpen::BlockStyler::Group*>(theDialog->TopBlock()->FindBlock("group"));
+		selectSheet = dynamic_cast<NXOpen::BlockStyler::BodyCollector*>(theDialog->TopBlock()->FindBlock("selectSheet"));
+		upOrDownDatums = dynamic_cast<NXOpen::BlockStyler::Toggle*>(theDialog->TopBlock()->FindBlock("upOrDownDatums"));
+		sheetOffsetDist = dynamic_cast<NXOpen::BlockStyler::DoubleBlock*>(theDialog->TopBlock()->FindBlock("sheetOffsetDist"));
+		curveOffsetDist = dynamic_cast<NXOpen::BlockStyler::DoubleBlock*>(theDialog->TopBlock()->FindBlock("curveOffsetDist"));
+		groupGernate = dynamic_cast<NXOpen::BlockStyler::Group*>(theDialog->TopBlock()->FindBlock("groupGernate"));
+		curvesSelect = dynamic_cast<NXOpen::BlockStyler::CurveCollector*>(theDialog->TopBlock()->FindBlock("curvesSelect"));
+		cutDir = dynamic_cast<NXOpen::BlockStyler::SpecifyVector*>(theDialog->TopBlock()->FindBlock("cutDir"));
+		assistStartPt = dynamic_cast<NXOpen::BlockStyler::SpecifyPoint*>(theDialog->TopBlock()->FindBlock("assistStartPt"));
+		buttonDirType = dynamic_cast<NXOpen::BlockStyler::Button*>(theDialog->TopBlock()->FindBlock("buttonDirType"));
+		assistLineLength = dynamic_cast<NXOpen::BlockStyler::DoubleBlock*>(theDialog->TopBlock()->FindBlock("assistLineLength"));
+		pos = dynamic_cast<NXOpen::BlockStyler::SpecifyOrientation*>(theDialog->TopBlock()->FindBlock("pos"));
+		UndoButton = dynamic_cast<NXOpen::BlockStyler::Button*>(theDialog->TopBlock()->FindBlock("UndoButton"));
+		assistButton = dynamic_cast<NXOpen::BlockStyler::Button*>(theDialog->TopBlock()->FindBlock("assistButton"));
+		groupParam = dynamic_cast<NXOpen::BlockStyler::Group*>(theDialog->TopBlock()->FindBlock("groupParam"));
+		cutDeltaLen = dynamic_cast<NXOpen::BlockStyler::DoubleBlock*>(theDialog->TopBlock()->FindBlock("cutDeltaLen"));
+		height = dynamic_cast<NXOpen::BlockStyler::DoubleBlock*>(theDialog->TopBlock()->FindBlock("height"));
+		cutDirCutLen = dynamic_cast<NXOpen::BlockStyler::DoubleBlock*>(theDialog->TopBlock()->FindBlock("cutDirCutLen"));
+		cutDirToolBlank = dynamic_cast<NXOpen::BlockStyler::DoubleBlock*>(theDialog->TopBlock()->FindBlock("cutDirToolBlank"));
+		cutShapeWide = dynamic_cast<NXOpen::BlockStyler::DoubleBlock*>(theDialog->TopBlock()->FindBlock("cutShapeWide"));
+		cutShapeBlank = dynamic_cast<NXOpen::BlockStyler::DoubleBlock*>(theDialog->TopBlock()->FindBlock("cutShapeBlank"));
+		groupAssist = dynamic_cast<NXOpen::BlockStyler::Group*>(theDialog->TopBlock()->FindBlock("groupAssist"));
+		faceDim = dynamic_cast<NXOpen::BlockStyler::LinearDimension*>(theDialog->TopBlock()->FindBlock("faceDim"));
+		adjustDir = dynamic_cast<NXOpen::BlockStyler::SpecifyVector*>(theDialog->TopBlock()->FindBlock("adjustDir"));
+		adjustPt = dynamic_cast<NXOpen::BlockStyler::SpecifyPoint*>(theDialog->TopBlock()->FindBlock("adjustPt"));
+		label0 = dynamic_cast<NXOpen::BlockStyler::Label*>(theDialog->TopBlock()->FindBlock("label0"));
+
+		label0->SetShow(false);
+		assistLineLength->SetShow(false);
+		pos->SetShow(false);
+		buttonDirType->SetShow(false);
+		curvesSelect->SetShow(true);
+		is_onceProCutdir = true;
+		is_buttonDirType = true;
+		assistButton->SetShow(false);
+		groupAssist->SetShow(false);
+		m_oneOpr = 0;
+		m_isInitial = false;
+		m_axisPt[0] = 0;
+		m_axisPt[1] = 0;
+		m_axisPt[2] = 0;
+		m_axisT = 0;
+		is_Trun = true;
+		m_assistDir[0] = 0;
+		m_assistDir[1] = 0;
+		m_assistDir[2] = 0;
+		m_trimCol = 0;
+		setValue();
+	}
+	catch (exception& ex)
+	{
+		//---- Enter your exception handling code here -----
+		ScrapSteelInsertTrimming::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+	}
+}
+
+void ScrapSteelInsertTrimming::dialogShown_cb()
+{
+	try
+	{
+		setValue();
+		UF_initialize();
+		UF_CSYS_ask_wcs(&curr_sys);
+		UF_terminate();
+		csys_id = MyFun::setAbsSys();
+	
+	}
+	catch (exception& ex)
+	{
+		//---- Enter your exception handling code here -----
+		ScrapSteelInsertTrimming::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+	}
+}
+
+int ScrapSteelInsertTrimming::apply_cb()
+{
+	int errorCode = 0;
+	try
+	{
+		//---- Enter your callback code here -----
+		
+		UF_initialize();
+		UF_OBJ_set_blank_status(m_Opr.m_sheetsSet[0], UF_OBJ_BLANKED);
+		if (m_Opr.step < 2)
+		{
+			
+// 			while (m_Opr.m_vertexPts.size() > 0)
+// 			{
+// 
+// 				m_Opr.MinDistOfVertexsEx();
+// 				UF_CURVE_line_t lt = { 0 };
+// 				UF_VEC3_copy(m_Opr.m_pCurveDataA->vertexPt, lt.start_point);
+// 				UF_VEC3_copy(m_Opr.m_pCurveDataB->vertexPt, lt.end_point);
+// 				UF_VEC3_copy(m_Opr.m_pCurveDataA->vertexPt, m_Opr.m_CurveData.start_point);
+// 				UF_VEC3_copy(m_Opr.m_pCurveDataB->vertexPt, m_Opr.m_CurveData.end_point);
+// 				m_Opr.m_CurveData.curve = 0;
+// 				m_Opr.DeleteCoupleOfVertexsEx();
+// 				adjustLineData(m_Opr.m_CurveData.curve, lt);
+// 				UF_OBJ_set_color(m_Opr.m_CurveData.curve, 138);
+// 				m_Opr.m_assistLD.push_back(m_Opr.m_CurveData);
+// 			}
+            for (int i = 0; i < m_Opr.m_vertexPts.size() / 2; i++)
+            {
+                autoCloseAssistCurves((CurveData*)&m_Opr.m_trimVCC[i], m_Opr.m_simplePro_[i], m_Opr.st_CutDir, 40, m_Opr.m_assistLD,0);
+            }
+            m_Opr.m_vertexPts.clear();
+			{
+				groupGernate->SetShow(false);
+				cutDeltaLen->SetShow(false);
+				group->SetShow(false);
+			}
+			getValue();
+			m_Opr.createBodyDST();
+			m_Opr.createDetailDST();
+		}
+		else if (m_Opr.step < 3)
+		{
+			getValue();
+			m_Opr.createDetailDST();
+		}
+
+		for (size_t i = 0; i < m_Opr.st_trimLtag.size(); i++)
+		{
+			MyFun::moveObj(m_Opr.st_trimLtag[i], m_Opr.st_CutDir, m_Opr.m_curvesMoveDist);
+			UF_OBJ_set_color(m_Opr.st_trimLtag[i], m_trimCol);
+		}
+		for (size_t i = 0; i < m_Opr.m_assistLD.size(); i++)
+		{
+			UF_OBJ_delete_object(m_Opr.m_assistLD[i].curve);
+		}
+		if (UF_OBJ_ask_status(m_axisT) != UF_OBJ_DELETED)
+			UF_OBJ_delete_object(m_axisT);
+		for (size_t i = 0; i < m_Opr.m_tempObj.size(); i++)
+		{
+			UF_OBJ_delete_object(m_Opr.m_tempObj[i]);
+		}
+		UF_OBJ_set_blank_status(m_Opr.m_sheetsSet[0], UF_OBJ_NOT_BLANKED);
+		UF_terminate();
+		groupAssist->SetShow(false);
+		groupGernate->SetShow(false);
+		groupParam->SetShow(false);
+
+	}
+	catch (exception& ex)
+	{
+		//---- Enter your exception handling code here -----
+		errorCode = 1;
+		ScrapSteelInsertTrimming::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+	}
+	return errorCode;
+}
+
+int ScrapSteelInsertTrimming::update_cb(NXOpen::BlockStyler::UIBlock* block)
+{
+	try
+	{
+		/////////////////////////////////////////////////////////////////////////////////////////
+		if (block == selectSheet)
+		{
+			//---------Enter your code here-----------
+			std::vector<NXOpen::TaggedObject *>sheet = selectSheet->GetSelectedObjects();
+
+			UF_initialize();
+			
+
+			tag_t temp = 0;
+			int bodyType = 0;
+			for (int i = 0;i < sheet.size();i++)
+			{
+				temp = sheet[i]->GetTag();
+				UF_MODL_ask_body_type(temp,&bodyType);
+				if (bodyType== UF_MODL_SHEET_BODY)
+				{
+					m_Opr.m_sheetsSet.push_back(sheet[i]->GetTag());
+				}
+			}
+			MyFun::sheetMoveInfo(m_Opr.m_sheetsSet.back(), m_Opr.m_sheetName, m_Opr.m_centerPt, m_Opr.m_sheetMovDir, m_Opr.m_sheetMovDist);
+			UF_terminate();
+		}
+		else if (block == sheetOffsetDist)
+		{
+			//---------Enter your code here-----------
+			m_Opr.m_sheetOffsetDist = sheetOffsetDist->Value();
+		}
+		else if (block == curvesSelect)
+		{
+			//---------Enter your code here-----------
+			m_axisPt[0] = 0;
+			m_axisPt[1] = 0;
+			m_axisPt[2] = 0;
+
+			m_assistDir[0] = 0;
+			m_assistDir[1] = 0;
+			m_assistDir[2] = 0;
+			std::vector<NXOpen::TaggedObject *>buf = curvesSelect->GetSelectedObjects();
+			m_Opr.st_trimLtag.clear();
+			memset(m_Opr.st_CutDir, 0, sizeof(double));
+			UF_initialize();
+			if (is_onceProCutdir)
+			{
+				for (int i = 0;i < m_Opr.st_trimLtag.size();i++)
+				{
+					m_Opr.m_tempObj.push_back(m_Opr.st_trimLtag[i]);
+				}
+			}
+			if (m_trimCol == 0)
+			{
+				UF_OBJ_disp_props_t disp_props = { 0 };
+				UF_OBJ_ask_display_properties(buf[0]->GetTag(), &disp_props);
+				m_trimCol = disp_props.color;
+			}
+
+			int type_ = 0;
+			int subType = 0;
+			for (int i = 0;i < buf.size();i++)
+			{
+				UF_OBJ_ask_type_and_subtype(buf[i]->GetTag(), &type_, &subType);
+				m_Opr.st_trimLtag.push_back(buf[i]->GetTag());
+				if (type_ != UF_line_type && type_ != UF_circle_type)
+				{
+					m_Opr.m_isNeedVector = true;
+				}
+			}
+			MyFun::getCurvePt(buf[0]->GetTag(), 0.5, m_axisPt);
+			if (m_Opr.m_isNeedVector)//有样条
+			{
+				return 0;
+			}
+			bool flage1 = isContainning(m_Opr.st_trimLtag, m_Opr.m_sheetsSet[0]);
+			bool flage2 = false;
+			if (m_Opr.m_isNeedVector != true && !flage1)
+			{
+				m_Opr.ProcessLineEx();
+				flage2 = true;
+			}
+			else if (m_Opr.m_isNeedVector != true && flage1)//无样条 但是 线在片体上
+			{
+				flage2 = true;
+				is_onceProCutdir = false;
+				if (m_Opr.st_CutDir[0] == 0 && m_Opr.st_CutDir[1] == 0 && m_Opr.st_CutDir[2] == 0)
+					return 0;
+
+				if (m_Opr.st_CutDir[2] < 0)
+					UF_VEC3_negate(m_Opr.st_CutDir, m_Opr.st_CutDir);
+
+				double pt_[3] = { 0 };
+				MyFun::getDirectionPos(m_Opr.st_CutDir, m_axisPt, 50, pt_);
+				MyFun::projectOperation(pt_, m_Opr.st_CutDir, m_Opr.st_trimLtag);
+				vector<tag_t> tempVVV;
+
+				int num = 0;
+				tag_p_t segments = NULL;
+				tag_t tempT = 0;
+				for (int i = 0;i < m_Opr.st_trimLtag.size();i++)
+				{
+					UF_OBJ_ask_type_and_subtype(m_Opr.st_trimLtag[i], &type_, &subType);
+
+					if (type_ == UF_line_type || type_ == UF_circle_type)
+					{
+						tempVVV.push_back(m_Opr.st_trimLtag[i]);
+						//UF_OBJ_set_color(m_Opr.st_trimLtag[i], 77);
+					}
+					else
+					{
+						tempT = m_Opr.st_trimLtag[i];
+						UF_CURVE_create_simplified_curve(1, &tempT, 0.0254, &num, &segments);
+						UF_OBJ_delete_object(tempT);
+						for (int j = 0;j < num;j++)
+						{
+							tempVVV.push_back(segments[j]);
+							//UF_OBJ_set_color(segments[j], 77);
+						}
+						if (segments)
+						{
+							UF_free(segments);
+							segments = NULL;
+						}
+					}
+				}
+				m_Opr.st_trimLtag = tempVVV;
+				m_Opr.m_isNeedVector = false;
+				m_Opr.m_isNeedProcessCurves = true;
+				m_Opr.ProcessLineEx();
+
+				
+			}
+
+			if (flage2)
+			{
+				UF_VEC3_copy(m_Opr.m_CurveDataA.vertexPt, m_axisPt);
+				NXOpen::Vector3d  vectors(m_Opr.st_CutDir[0], m_Opr.st_CutDir[1], m_Opr.st_CutDir[2]);
+				cutDir->SetVector(vectors);
+				double pt0[3] = { 0 };
+				MyFun::getDirectionPos(m_Opr.st_CutDir, m_axisPt, 2, pt0);
+				if (UF_OBJ_ask_status(m_axisT) != UF_OBJ_DELETED)
+					UF_OBJ_delete_object(m_axisT);
+				if (MyFun::is_Equal(m_Opr.st_CutDir, tempD, 0.001) == 0)
+					UF_CALL(UF_MODL_create_fixed_daxis(m_axisPt, pt0, &m_axisT));
+				UF_OBJ_set_color(m_axisT, 186);
+				UF_terminate();
+
+
+				if (m_Opr.m_vertexPts.size() == 0)
+				{
+					groupGernate->SetShow(false);
+				}
+				else
+				{
+					assistButton->SetShow(true);
+					pos->SetShow(false);
+					NXOpen::Point3d point;
+					assistStartPt->SetPoint(point);
+					assistLineLength->SetShow(false);
+				}
+			}
+
+		}
+		else if (block == cutDir)
+		{
+			//---------Enter your code here-----------
+			Vector3d buf = cutDir->Vector();
+			m_Opr.st_CutDir[0] = buf.X;
+			m_Opr.st_CutDir[1] = buf.Y;
+			m_Opr.st_CutDir[2] = buf.Z;
+			UF_initialize();
+			if (is_onceProCutdir)
+			{
+				is_onceProCutdir = false;
+				if (m_Opr.st_CutDir[2] < 0)
+				{
+					UF_VEC3_negate(m_Opr.st_CutDir, m_Opr.st_CutDir);
+				}
+
+				double pt_[3] = { 0 };
+				MyFun::getDirectionPos(m_Opr.st_CutDir, m_axisPt, 50, pt_);
+				MyFun::projectOperation(pt_, m_Opr.st_CutDir, m_Opr.st_trimLtag);
+				vector<tag_t> tempVVV;
+
+				int type_ = 0;
+				int subType = 0;
+				int num = 0;
+				tag_p_t segments = NULL;
+				tag_t tempT = 0;
+				for (int i = 0;i < m_Opr.st_trimLtag.size();i++)
+				{
+					UF_OBJ_ask_type_and_subtype(m_Opr.st_trimLtag[i], &type_, &subType);
+					/*m_Opr.m_tempObj.push_back(m_Opr.st_trimLtag[i]);*/
+					if (type_ == UF_line_type || type_ == UF_circle_type)
+					{
+						tempVVV.push_back(m_Opr.st_trimLtag[i]);
+						//UF_OBJ_set_color(m_Opr.st_trimLtag[i], 77);
+					}
+					else
+					{
+						tempT = m_Opr.st_trimLtag[i];
+						UF_CURVE_create_simplified_curve(1, &tempT, 0.0254, &num, &segments);
+						UF_OBJ_delete_object(tempT);
+						for (int j = 0;j < num;j++)
+						{
+							tempVVV.push_back(segments[j]);
+
+							//UF_OBJ_set_color(segments[j], 77);
+						}
+						if (segments)
+						{
+							UF_free(segments);
+							segments = NULL;
+						}
+					}
+				}
+				m_Opr.st_trimLtag = tempVVV;
+				m_Opr.m_isNeedVector = false;
+				m_Opr.m_isNeedProcessCurves = true;
+				m_Opr.ProcessLineEx();
+
+				UF_VEC3_copy(m_Opr.m_CurveDataA.vertexPt, m_axisPt);
+				if (m_Opr.m_vertexPts.size() == 0)
+				{
+					groupGernate->SetShow(false);
+				}
+				else
+				{
+					assistButton->SetShow(true);
+					pos->SetShow(false);
+					NXOpen::Point3d point;
+					assistStartPt->SetPoint(point);
+					assistLineLength->SetShow(false);
+				}
+			}
+			double pt[3] = { 0 };
+			MyFun::getDirectionPos(m_Opr.st_CutDir, m_axisPt, 20, pt);
+			if (UF_OBJ_ask_status(m_axisT) != UF_OBJ_DELETED)
+				UF_OBJ_delete_object(m_axisT);
+			if (MyFun::is_Equal(m_Opr.st_CutDir, tempD, 0.001) == 0)
+				UF_MODL_create_fixed_daxis(m_axisPt, pt, &m_axisT);
+			UF_OBJ_set_color(m_axisT, 186);
+			UF_terminate();
+			assistStartPt->Focus();
+		}
+		else if (block == cutDeltaLen)
+		{
+			//---------Enter your code here-----------
+			m_Opr.st_cutDirDeltaLen = cutDeltaLen->Value();
+		}
+		/////////Open////////////////////////////////////////////////////////////////////////////
+		if (m_Opr.m_vertexPts.size() > 0)//辅助与成型
+		{
+			if (block == assistStartPt)
+			{
+				m_oneOpr = 0;
+				Point3d temp = assistStartPt->Point();
+				double ptStart[3] = { temp.X,temp.Y,temp.Z };
+
+				//判断选中的开口端点
+
+				m_Opr.setStartPtEx(ptStart);
+				if (m_Opr.m_pCurveData == NULL)
+				{
+					assistLineLength->SetShow(false);
+					pos->SetShow(false);
+					buttonDirType->SetShow(false);
+					UndoButton->SetShow(false);
+					NXOpen::Point3d point;
+					assistStartPt->SetPoint(point);
+					assistStartPt->Focus();
+					return 0;
+				}
+				assistLineLength->SetShow(true);
+				pos->SetShow(true);
+				buttonDirType->SetShow(true);
+				UndoButton->SetShow(true);
+
+				curvesSelect->SetShow(false);
+				memcpy(&m_Opr.m_CurveData, m_Opr.m_pCurveData, sizeof(CurveData));
+				assistLineLength->SetShow(true);
+				pos->SetOrigin(temp);
+				adjustPosDir();
+			}
+			else if (block == pos)
+			{
+				Vector3d xx = pos->XAxis();
+				m_assistDir[0] = xx.X;
+				m_assistDir[1] = xx.Y;
+				m_assistDir[2] = xx.Z;
+
+				movePosEx();
+				NXOpen::Point3d point;
+				assistStartPt->SetPoint(point);
+			}
+			else if (block == assistLineLength)
+			{
+				//---------Enter your code here-----------
+				double dist = assistLineLength->Value();
+				if ((dist > -1 && dist < 1) && m_oneOpr <= 0)
+				{
+					UF_VEC3_distance(m_Opr.m_CurveData.start_point, m_Opr.m_CurveData.end_point, &dist);
+					UF_CURVE_line_t lt = { 0 };
+					UF_VEC3_copy(m_Opr.m_CurveData.start_point, lt.start_point);
+					UF_VEC3_copy(m_Opr.m_CurveData.end_point, lt.end_point);
+					adjustLineData(m_Opr.m_CurveData.curve, lt);
+					assistLineLength->SetValue(dist);
+					return 0;
+				}
+
+				if (dist != 0)
+				{
+					MyFun::getDirectionPos(m_assistDir, m_Opr.m_CurveData.start_point, dist, m_Opr.m_CurveData.end_point);
+					UF_VEC3_copy(m_Opr.m_CurveData.end_point, m_Opr.m_CurveData.vertexPt);
+
+					UF_CURVE_line_t lt = { 0 };
+					UF_VEC3_copy(m_Opr.m_CurveData.start_point, lt.start_point);
+					UF_VEC3_copy(m_Opr.m_CurveData.end_point, lt.end_point);
+
+					adjustLineData(m_Opr.m_CurveData.curve, lt);
+					if (m_oneOpr)
+						m_Opr.m_assistLD.back() = m_Opr.m_CurveData;
+					*m_Opr.m_pCurveData = m_Opr.m_CurveData;
+				}
+				else
+				{
+					m_oneOpr--;
+					UF_OBJ_delete_object(m_Opr.m_assistLD.back().curve);
+					m_Opr.m_assistLD.pop_back();
+					if (m_oneOpr > 0)
+					{
+						*m_Opr.m_pCurveData = m_Opr.m_assistLD.back();
+						m_Opr.m_CurveData = m_Opr.m_assistLD.back();
+					}
+					else
+					{
+						*m_Opr.m_pCurveData = m_Opr.m_CurveData1;
+						m_Opr.m_CurveData = m_Opr.m_CurveData1;
+					}
+				}
+
+				UF_VEC3_sub(m_Opr.m_CurveData.end_point, m_Opr.m_CurveData.start_point, m_assistDir);
+				Point3d temp(m_Opr.m_CurveData.end_point[0], m_Opr.m_CurveData.end_point[1], m_Opr.m_CurveData.end_point[2]);
+				pos->SetOrigin(temp);
+				Vector3d xx(m_assistDir[0], m_assistDir[1], m_assistDir[2]);
+				pos->SetXAxis(xx);
+			}
+			else if (block == assistButton)
+			{
+				UF_initialize();
+				UF_OBJ_set_blank_status(m_Opr.m_sheetsSet[0], UF_OBJ_BLANKED);
+// 				if (m_Opr.m_vertexPts.size() > 0)
+// 				{
+// 
+// 					m_Opr.MinDistOfVertexsEx();
+// 					UF_CURVE_line_t lt = { 0 };
+// 					UF_VEC3_copy(m_Opr.m_pCurveDataA->vertexPt, lt.start_point);
+// 					UF_VEC3_copy(m_Opr.m_pCurveDataB->vertexPt, lt.end_point);
+// 					UF_VEC3_copy(m_Opr.m_pCurveDataA->vertexPt, m_Opr.m_CurveData.start_point);
+// 					UF_VEC3_copy(m_Opr.m_pCurveDataB->vertexPt, m_Opr.m_CurveData.end_point);
+// 					m_Opr.m_CurveData.curve = 0;
+// 					m_Opr.DeleteCoupleOfVertexsEx();
+// 					adjustLineData(m_Opr.m_CurveData.curve, lt);
+// 					UF_OBJ_set_color(m_Opr.m_CurveData.curve, 138);
+// 					m_Opr.m_assistLD.push_back(m_Opr.m_CurveData);
+// 				}
+                for (int i = 0; i < m_Opr.m_vertexPts.size() / 2; i++)
+                {
+                    autoCloseAssistCurves((CurveData*)&m_Opr.m_trimVCC[i], m_Opr.m_simplePro_[i], m_Opr.st_CutDir, 40, m_Opr.m_assistLD, 0);
+                }
+                m_Opr.m_vertexPts.clear();
+				//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				if (m_Opr.m_vertexPts.size() == 0)
+				{
+					groupGernate->SetShow(false);
+					cutDeltaLen->SetShow(false);
+					group->SetShow(false);
+					getValue();
+					m_Opr.createBodyDST();
+
+					double pt0[3] = { 0 };
+					MyFun::getDirectionPos(m_Opr.st_CutDir, m_axisPt, 2, pt0);
+
+					if (UF_OBJ_ask_status(m_axisT) != UF_OBJ_DELETED)
+						UF_OBJ_delete_object(m_axisT);
+					if (MyFun::is_Equal(m_Opr.st_CutDir, tempD, 0.001) == 0)
+						UF_MODL_create_fixed_daxis(m_axisPt, pt0, &m_axisT);
+				}
+				UF_terminate();
+			}
+			else if (block == UndoButton)
+			{
+				double dist = 0;
+
+				if (m_oneOpr > 0)
+				{
+					m_oneOpr--;
+					UF_OBJ_delete_object(m_Opr.m_assistLD.back().curve);
+					m_Opr.m_assistLD.pop_back();
+					if (m_oneOpr > 0)
+					{
+						*m_Opr.m_pCurveData = m_Opr.m_assistLD.back();
+						m_Opr.m_CurveData = m_Opr.m_assistLD.back();
+					}
+					else
+					{
+						*m_Opr.m_pCurveData = m_Opr.m_CurveData1;
+						m_Opr.m_CurveData = m_Opr.m_CurveData1;
+					}
+				}
+				UF_VEC3_sub(m_Opr.m_CurveData.end_point, m_Opr.m_CurveData.start_point, m_assistDir);
+				Point3d temp(m_Opr.m_CurveData.end_point[0], m_Opr.m_CurveData.end_point[1], m_Opr.m_CurveData.end_point[2]);
+				pos->SetOrigin(temp);
+				Vector3d xx(m_assistDir[0], m_assistDir[1], m_assistDir[2]);
+				pos->SetXAxis(xx);
+				UF_VEC3_distance(m_Opr.m_CurveData.end_point, m_Opr.m_CurveData.start_point, &dist);
+				assistLineLength->SetValue(dist);
+
+			}
+			else if (block == buttonDirType)
+			{
+				adjustPosDir();
+			}
+		}
+		/////////Close////////////////////////////////////////////////////////////////////////////
+		else //成型与调整
+		{
+			if (block == faceDim)
+			{
+				//SetHandleOrientation;
+				//SetHandleOrigin
+			}	
+			else if (block == adjustDir)
+			{
+				//---------Enter your code here-----------
+			}
+			else if (block == adjustPt)
+			{
+				//---------Enter your code here-----------
+			}
+			else if (block == height)
+			{
+				double buf = height->Value();
+				if (buf>=40.0f&&buf<=45.0f)
+				{
+					m_Opr.st_ToolHeight = buf;
+					if (m_Opr.st_ToolBreadth<(1.2*buf))
+					{
+						m_Opr.st_ToolBreadth = 1.2*buf;
+					}
+				}
+				UF_initialize();
+				if (UF_OBJ_ask_status(m_Opr.m_extrud) != UF_OBJ_DELETED) UF_OBJ_delete_object(m_Opr.m_extrud);
+				UF_terminate();
+			}
+			else if (block == cutDirCutLen)
+			{
+				//---------Enter your code here-----------
+				m_Opr.st_cutDirCutLen=cutDirCutLen->Value();
+			}
+			else if (block == cutDirToolBlank)
+			{
+				//---------Enter your code here-----------
+				m_Opr.st_cutDirToolBlank = cutDirToolBlank->Value();
+			}
+			else if (block == cutShapeWide)
+			{
+				//---------Enter your code here-----------
+				m_Opr.st_cutShapeWide = cutShapeWide->Value();
+			}
+			else if (block == cutShapeBlank)
+			{
+				//---------Enter your code here-----------
+				m_Opr.st_cutShapeBlank = cutShapeBlank->Value();
+			}
+		}
+	}
+	catch (exception& ex)
+	{
+		ScrapSteelInsertTrimming::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+	}
+	return 0;
+}
+
+void ScrapSteelInsertTrimming::movePosEx()//辅助线生成
+{
+	double ref_pt[3] = { 0 };
+	Point3d temp3 = pos->Origin();
+	ref_pt[0] = temp3.X;
+	ref_pt[1] = temp3.Y;
+	ref_pt[2] = temp3.Z;
+	double dir[3] = { 0 };
+	UF_CURVE_line_t lt = { 0 };
+	UF_initialize();
+	int type = 0;
+	int subtype = 0;
+	UF_OBJ_ask_type_and_subtype(m_Opr.m_CurveData.curve, &type, &subtype);
+	if (!(MyFun::is_Equal(ref_pt, m_Opr.m_CurveData.end_point, 0.01)))
+	{
+		if (type == UF_line_type)
+			UF_VEC3_sub(m_Opr.m_CurveData.end_point, m_Opr.m_CurveData.start_point, dir);
+		int temp_N = 0;
+		UF_VEC3_is_parallel(m_assistDir, dir, 0.001, &temp_N);
+		double dist = 0;
+		if (!temp_N || type != UF_line_type)//不平行或者 m_comOpr.m_CurveData不是直线说明是新建的直线
+		{
+			UF_VEC3_copy(m_Opr.m_CurveData.end_point, m_Opr.m_CurveData.start_point);
+			UF_VEC3_copy(ref_pt, m_Opr.m_CurveData.vertexPt);
+			UF_VEC3_copy(ref_pt, m_Opr.m_CurveData.end_point);
+			m_Opr.m_CurveData.curve = 0;//置为零下次才能新建,否则会编辑就的直线.
+										//新建直线
+			UF_VEC3_copy(m_Opr.m_CurveData.start_point, lt.start_point);
+			UF_VEC3_copy(m_Opr.m_CurveData.end_point, lt.end_point);
+			adjustLineData(m_Opr.m_CurveData.curve, lt);
+			m_Opr.m_assistLD.push_back(m_Opr.m_CurveData);//直线收集
+			m_oneOpr++;
+			*m_Opr.m_pCurveData = m_Opr.m_CurveData;
+			UF_VEC3_distance(ref_pt, m_Opr.m_CurveData.start_point, &dist);
+			UF_OBJ_set_color(m_Opr.m_CurveData.curve, 138);
+		}
+		else //如果平行处理
+		{
+			UF_VEC3_distance(ref_pt, m_Opr.m_CurveData.start_point, &dist);
+			if (m_oneOpr == 0)
+			{
+				if (dist < 1)
+				{
+					UF_VEC3_copy(m_Opr.m_CurveData.start_point, lt.start_point);
+					UF_VEC3_copy(m_Opr.m_CurveData.end_point, lt.end_point);
+					adjustLineData(m_Opr.m_CurveData.curve, lt);
+					*m_Opr.m_pCurveData = m_Opr.m_CurveData;
+					m_Opr.m_CurveData1=m_Opr.m_CurveData;
+					temp3.X = m_Opr.m_CurveData.end_point[0];
+					temp3.Y = m_Opr.m_CurveData.end_point[1];
+					temp3.Z = m_Opr.m_CurveData.end_point[2];
+					pos->SetOrigin(temp3);
+				}
+				else
+				{
+					UF_VEC3_copy(ref_pt, m_Opr.m_CurveData.end_point);
+					UF_VEC3_copy(ref_pt, m_Opr.m_CurveData.vertexPt);
+					UF_VEC3_copy(m_Opr.m_CurveData.start_point, lt.start_point);
+					UF_VEC3_copy(m_Opr.m_CurveData.end_point, lt.end_point);
+					adjustLineData(m_Opr.m_CurveData.curve, lt);
+					*m_Opr.m_pCurveData = m_Opr.m_CurveData;
+					m_Opr.m_CurveData1 = m_Opr.m_CurveData;
+
+				}
+				for (int i = 0;i < m_Opr.m_trimLD.size();i++)
+				{
+					if (m_Opr.m_CurveData.curve == m_Opr.m_trimLD[i].curve)
+					{
+						m_Opr.m_trimLD[i] = m_Opr.m_CurveData;
+						break;
+					}
+				}
+				for (int i = 0;i < m_Opr.m_trimVCC.size();i++)
+				{
+					if (m_Opr.m_CurveData.curve == m_Opr.m_trimVCC[i].a.curve)
+					{
+						m_Opr.m_trimVCC[i].a= m_Opr.m_CurveData;
+						break;
+					}
+					if (m_Opr.m_CurveData.curve == m_Opr.m_trimVCC[i].b.curve)
+					{
+						 m_Opr.m_trimVCC[i].b= m_Opr.m_CurveData;
+						break;
+					}
+				}
+				*m_Opr.m_pCurveData = m_Opr.m_CurveData;
+				return;
+			}	
+			UF_VEC3_copy(ref_pt, m_Opr.m_CurveData.end_point);	
+			UF_VEC3_copy(ref_pt, m_Opr.m_CurveData.vertexPt);
+			UF_VEC3_copy(m_Opr.m_CurveData.start_point, lt.start_point);
+			UF_VEC3_copy(m_Opr.m_CurveData.end_point, lt.end_point);
+			adjustLineData(m_Opr.m_CurveData.curve, lt);//编辑直线
+			if (dist > 0)
+			{
+				m_Opr.m_assistLD.back() = m_Opr.m_CurveData;
+				*m_Opr.m_pCurveData = m_Opr.m_CurveData;
+			}
+			else
+			{
+				m_oneOpr--;
+				UF_OBJ_delete_object(m_Opr.m_assistLD.back().curve);
+				m_Opr.m_assistLD.pop_back();
+				if (m_oneOpr > 0)
+				{
+					*m_Opr.m_pCurveData = m_Opr.m_assistLD.back();
+					m_Opr.m_CurveData = m_Opr.m_assistLD.back();
+				}
+				else
+				{
+					*m_Opr.m_pCurveData = m_Opr.m_CurveData1;
+					m_Opr.m_CurveData = m_Opr.m_CurveData1;////////////todo
+				}
+
+				UF_VEC3_sub(m_Opr.m_CurveData.end_point, m_Opr.m_CurveData.start_point, m_assistDir);
+				Vector3d a(m_assistDir[0], m_assistDir[1], m_assistDir[2]);
+				pos->SetXAxis(a);
+			}
+		}
+
+		assistLineLength->SetValue(dist);
+		UF_terminate();
+	}
+	else//距离未变说明在旋转
+	{
+		Vector3d a = pos->XAxis();
+		m_assistDir[0] = a.X;
+		m_assistDir[1] = a.Y;
+		m_assistDir[2] = a.Z;
+	}
+}
+
+void ScrapSteelInsertTrimming::adjustLineData(tag_t &line, UF_CURVE_line_t& lt)
+{
+	UF_initialize();
+	int a;
+	UF_VEC3_is_equal(lt.start_point,lt.end_point,0.001,&a);
+	if (a)
+	{
+		if (UF_OBJ_ask_status(line)!=UF_OBJ_DELETED)
+		{
+			UF_OBJ_delete_object(line);
+			line = 0;
+		}
+	}
+	else
+	{
+		if (UF_OBJ_ask_status(line) != UF_OBJ_DELETED)
+		{
+			UF_CURVE_edit_line_data(line, &lt);
+		}
+		else
+		{
+			UF_CURVE_create_line(&lt, &line);
+		}
+	}
+	UF_terminate();
+}
+
+void ScrapSteelInsertTrimming::adjustPosDir()
+{
+	Vector3d  xAxis;
+	Vector3d  yAxis;
+	UF_VEC3_copy(m_Opr.m_pCurveData->dir_Center, m_assistDir);
+
+	double dir_[3];
+	is_buttonDirType = !is_buttonDirType;
+	if (is_buttonDirType)
+	{
+
+		UF_VEC3_cross(m_assistDir, m_Opr.st_CutDir, dir_);
+		xAxis.setValue(m_assistDir);
+		yAxis.setValue(dir_);
+	}
+	else
+	{
+		double angle1 = MyFun::angleOfVectors(m_assistDir, m_Opr.m_xProjectdir);
+		if (angle1 > PI / 2)
+		{
+			angle1 = PI - angle1;
+			UF_VEC3_negate(m_Opr.m_xProjectdir, m_Opr.m_xProjectdir);
+		}
+		double angle2 = MyFun::angleOfVectors(m_assistDir, m_Opr.m_yProjectdir);
+		if (angle2 > PI / 2)
+		{
+			angle2 = PI - angle2;
+			UF_VEC3_negate(m_Opr.m_yProjectdir, m_Opr.m_yProjectdir);
+		}
+
+		if (is_Trun)
+		{
+			xAxis.setValue(m_Opr.m_xProjectdir);
+			UF_VEC3_cross(m_Opr.m_xProjectdir, m_Opr.st_CutDir, dir_);
+			yAxis.setValue(dir_);
+			UF_VEC3_copy(m_Opr.m_xProjectdir, m_assistDir);
+		}
+		else
+		{
+			xAxis.setValue(m_Opr.m_yProjectdir);
+			UF_VEC3_cross(m_Opr.m_yProjectdir, m_Opr.st_CutDir, dir_);
+			yAxis.setValue(dir_);
+			UF_VEC3_copy(m_Opr.m_yProjectdir, m_assistDir);
+		}
+		is_Trun = !is_Trun;
+	}
+	pos->SetXAxis(xAxis);
+	pos->SetYAxis(yAxis);
+	pos->SetEnable(true);
+	pos->Focus();
+}
+
+int ScrapSteelInsertTrimming::ok_cb()
+{
+	int errorCode = 0;
+	try
+	{
+		errorCode = apply_cb();
+	}
+	catch (exception& ex)
+	{
+		//---- Enter your exception handling code here -----
+		errorCode = 1;
+		ScrapSteelInsertTrimming::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+	}
+	return errorCode;
+}
+
+PropertyList* ScrapSteelInsertTrimming::GetBlockProperties(const char *blockID)
+{
+	return theDialog->GetBlockProperties(blockID);
+}
+extern "C" DllExport void  ufusr(char *param, int *retcod, int param_len)
+{
+	ScrapSteelInsertTrimming *theUpperSteelInsertTrimming = NULL;
+	try
+	{
+		theUpperSteelInsertTrimming = new ScrapSteelInsertTrimming();
+		// The following method shows the dialog immediately
+		theUpperSteelInsertTrimming->Show();
+	}
+	catch (exception& ex)
+	{
+		//---- Enter your exception handling code here -----
+		ScrapSteelInsertTrimming::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+	}
+	if (theUpperSteelInsertTrimming != NULL)
+	{
+		delete theUpperSteelInsertTrimming;
+		theUpperSteelInsertTrimming = NULL;
+	}
+}
+
+extern "C" DllExport int ufusr_ask_unload()
+{
+	//return (int)Session::LibraryUnloadOptionExplicitly;
+	return (int)Session::LibraryUnloadOptionImmediately;
+	//return (int)Session::LibraryUnloadOptionAtTermination;
+}
+
+extern "C" DllExport void ufusr_cleanup(void)
+{
+	try
+	{
+		//---- Enter your callback code here -----
+	}
+	catch (exception& ex)
+	{
+		//---- Enter your exception handling code here -----
+		ScrapSteelInsertTrimming::theUI->NXMessageBox()->Show("Block Styler", NXOpen::NXMessageBox::DialogTypeError, ex.what());
+	}
+}

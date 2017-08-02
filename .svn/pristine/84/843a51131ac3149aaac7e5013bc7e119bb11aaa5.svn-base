@@ -1,0 +1,237 @@
+#ifndef EDITTRIMCURVES_H_INCLUDED
+#define EDITTRIMCURVES_H_INCLUDED
+
+
+#include <uf_defs.h>
+#include <uf_ui_types.h>
+#include <iostream>
+#include <NXOpen/Session.hxx>
+#include <NXOpen/UI.hxx>
+#include <NXOpen/NXMessageBox.hxx>
+#include <NXOpen/Callback.hxx>
+#include <NXOpen/NXException.hxx>
+#include <NXOpen/BlockStyler_UIBlock.hxx>
+#include <NXOpen/BlockStyler_BlockDialog.hxx>
+#include <NXOpen/BlockStyler_PropertyList.hxx>
+#include <NXOpen/BlockStyler_Group.hxx>
+#include <NXOpen/BlockStyler_CurveCollector.hxx>
+#include <NXOpen/BlockStyler_SpecifyVector.hxx>
+#include <NXOpen/BlockStyler_SpecifyPoint.hxx>
+#include <NXOpen/BlockStyler_SpecifyOrientation.hxx>
+#include <NXOpen/BlockStyler_Button.hxx>
+#include <NXOpen/BlockStyler_DoubleBlock.hxx>
+#include "../Include/assistFun.h"
+#include "CurveAttrE.h"
+
+
+
+using namespace std;
+using namespace NXOpen;
+using namespace NXOpen::BlockStyler;
+
+
+
+
+class DllExport EditTrimCurves
+{
+    // class members
+public:
+    static Session *theSession;
+    static UI *theUI;
+    EditTrimCurves();
+    ~EditTrimCurves();
+    int Show();
+
+    void initialize_cb();
+    void dialogShown_cb();
+    int apply_cb();
+    int ok_cb();
+    int update_cb(NXOpen::BlockStyler::UIBlock* block);
+
+    template<class T>
+    void deletePointerSet(vector<T*>&temp)
+    {
+        for (int i = 0; i < temp.size();i++)
+            delete temp[i];
+        temp.clear();
+    }
+
+    void simplifySpline()
+    {
+        if (m_trimCurves.size()==0) return;
+        if (m_cutDir.Z < 0)
+            UF_VEC3_negate((double*)&m_cutDir, (double*)&m_cutDir);
+        double pt_[3];
+        MyFun::getCurvePt(m_pTrimCurves[0]->curve, 0.5, pt_);
+        MyFun::getDirectionPos((double*)&m_cutDir, pt_, 50, pt_);
+        MyFun::projectOperation(pt_, (double*)&m_cutDir, m_trimCurves);
+
+        vector<tag_t> tempVVV;
+
+        int num = 0;
+        tag_p_t segments = NULL;
+        tag_t tempT = 0;
+        int type_, subType;
+
+        for (int i = 0; i < m_trimCurves.size(); i++)
+        {
+            UF_OBJ_ask_type_and_subtype(m_trimCurves[i], &type_, &subType);
+            if (type_ == UF_line_type || type_ == UF_circle_type)
+                tempVVV.push_back(m_trimCurves[i]);
+            else
+            {
+                tempT = m_trimCurves[i];
+                UF_CURVE_create_simplified_curve(1, &tempT, 0.0254, &num, &segments);
+                UF_OBJ_delete_object(tempT);
+                for (int j = 0; j < num; j++)
+                    tempVVV.push_back(segments[j]);
+                if (segments)
+                {
+                    UF_free(segments);
+                    segments = NULL;
+                }
+            }
+        }
+        deletePointerSet(m_pTrimCurves);
+
+        m_trimCurves = tempVVV;
+
+        for (int i = 0; i < m_trimCurves.size();i++)
+            m_pTrimCurves.push_back(new CurveData(m_trimCurves[i]));
+        
+       sortCurvesPointor(m_pTrimCurves, m_trimCurvesGroupUP);
+       ArcTranslateLine(m_trimCurvesGroupUP);
+       stdProcessCurves(m_trimCurvesGroupUP);
+       stdProcessCurves(m_trimCurvesGroupUP);
+    }
+
+    bool  hasSpline()
+    {
+        m_hasSpline = false;
+        for (int i = 0; i < m_pTrimCurves.size(); i++)//hasSpline?
+            if (m_pTrimCurves[i]->type_ == UF_spline_type)
+            {
+                m_hasSpline = true;
+                break;
+            }
+        return m_hasSpline;
+    }
+
+    void GenerateAssistLines()
+    {
+        cutDir->SetEnable(false);
+        deletePointerSet(m_pAssistCurves);
+        deletePointerSet(m_assistCurvesTempGroup);
+        TrimCurveData tcd = {0};
+        int count_;
+        int index_;
+        for (int i = 0; i < m_trimCurvesGroupUP.size(); i++)//上模
+        {
+            index_ = BYTE_4(m_pAssistCurves.size());
+            autoCloseAssistCurves(m_trimCurvesGroupUP[i], m_cutDir,40, m_pAssistCurves, count_);
+            tcd.assist_ = new vector<CurveData*>();
+            for (int j = 0; j < count_; j++)
+                tcd.assist_->push_back(m_pAssistCurves[j + index_]);
+            {
+                m_pAssistCurves.push_back(new CurveData(m_trimCurvesGroupUP[i][0]->curve));
+                m_pAssistCurves.push_back(new CurveData(m_trimCurvesGroupUP[i].back()->curve));
+            }
+            tcd.trim_ = &m_trimCurvesGroupUP[i];
+            m_trimCurveDataUP.push_back(tcd);
+            m_assistCurvesTempGroup.push_back(tcd.assist_);
+        }
+        //在函数内写属性
+        m_attr.writeAttrToCurves(m_trimCurveDataUP, CurveAttrE::UPType);
+
+
+        std::vector<vector<CurveData*>> m_trimCurvesGroupDW;
+        vector<CurveData*>* tempCDVSET=new vector<CurveData*>[m_trimCurvesGroupUP.size()];
+
+
+        if (m_cutDir.Z>0)
+            UF_VEC3_negate((double*)&m_cutDir, (double*)&m_cutDir);
+
+        for (int i = 0; i < m_trimCurvesGroupUP.size();i++)
+        {
+            CurveData* tempCDPSET = new CurveData[m_trimCurvesGroupUP[i].size()];//
+            for (int j = 0; j < m_trimCurvesGroupUP[i].size(); j++)
+            {
+                tempCDPSET[j].setData(MyFun::moveObj(m_trimCurvesGroupUP[i][j]->curve, m_cutDir, 100, false));
+                tempCDVSET[i].push_back(&tempCDPSET[j]);
+            }
+            vector<vector<CurveData*>> rt_simplePro;
+            sortCurvesPointor(tempCDVSET[i], rt_simplePro);
+            if (rt_simplePro.size()!=1)
+                SHOW_INFO_USR("排序处理异常！");
+            m_trimCurvesGroupDW.push_back(rt_simplePro[0]);
+        }
+
+        for (int i = 0; i < m_trimCurvesGroupDW.size(); i++)//下模
+        {
+            index_ = index_ = BYTE_4(m_pAssistCurves.size());
+            autoCloseAssistCurves(m_trimCurvesGroupDW[i], m_cutDir, 40, m_pAssistCurves, count_, 0);
+            tcd.assist_ = new vector<CurveData*>();
+            for (int j = 0; j < count_; j++)
+                tcd.assist_->push_back(m_pAssistCurves[j + index_]);
+            {
+                m_pAssistCurves.push_back(new CurveData(m_trimCurvesGroupDW[i][0]->curve));
+                m_pAssistCurves.push_back(new CurveData(m_trimCurvesGroupDW[i].back()->curve));
+            }
+            tcd.trim_ = &m_trimCurvesGroupDW[i];
+            m_trimCurveDataDW.push_back(tcd);
+            m_assistCurvesTempGroup.push_back(tcd.assist_);
+        }
+        m_attr.writeAttrToCurves(m_trimCurveDataDW, CurveAttrE::DwType);
+        m_trimCurveDataDW.clear();
+        m_trimCurveDataUP.clear();
+        //输入参数需要在函数结束时释放，必须在函数内写属性
+        
+        for (int i = 0; i < m_trimCurvesGroupUP.size();i++)
+            delete[] tempCDVSET[i][0];
+        delete[] tempCDVSET;
+    }
+
+    void 
+
+
+
+    
+    PropertyList* GetBlockProperties(const char *blockID);
+    DECLARE_CSYS_MFUN
+private:
+    const char* theDlxFileName;
+    NXOpen::BlockStyler::BlockDialog* theDialog;
+    NXOpen::BlockStyler::Group* groupGernate;// Block type: Group
+    NXOpen::BlockStyler::CurveCollector* curvesSelect;// Block type: Curve Collector
+    NXOpen::BlockStyler::SpecifyVector* cutDir;// Block type: Specify Vector
+    NXOpen::BlockStyler::CurveCollector* assistSelect;// Block type: Curve Collector
+    NXOpen::BlockStyler::SpecifyOrientation* manipulator;// Block type: Specify Orientation
+    NXOpen::BlockStyler::Button* buttonDirType;// Block type: Button
+
+    std::vector<CurveData*> m_pTrimCurves;                      //need delete
+    std::vector<vector<CurveData*>> m_trimCurvesGroupUP;        //存指针需要delete，存对象不用delete
+
+    std::vector<tag_t> m_trimCurves;
+
+    std::vector<CurveData*> m_pAssistCurves;                    //need delete 加入两条修边线
+    std::vector<vector<CurveData*>*> m_assistCurvesTempGroup;   //need delete!
+
+
+    
+    std::vector<TrimCurveData> m_trimCurveDataUP;
+    std::vector<TrimCurveData> m_trimCurveDataDW;
+    
+    std::vector<vector<CurveData*>> m_assistCurvesGroup;
+
+    CurveAttrE m_attr;
+
+    CurveData* m_pCur_CD;
+    CurveData* m_pPost_CD;
+    CurveData m_editCD1;
+    CurveData m_editCD2;
+
+    Vector3d m_cutDir;
+    bool m_hasSpline;
+    int m_color;
+};
+#endif //EDITTRIMCURVES_H_INCLUDED

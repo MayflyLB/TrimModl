@@ -1,0 +1,113 @@
+#ifndef _CURTTERATTRE_H
+#define _CURTTERATTRE_H
+#include "../Include/assistFun.h"
+struct  TrimCurveData   //一级指针有内容！！！
+{
+    vector<CurveData*>* trim_;
+    vector<CurveData*>* assist_;
+};
+
+class CurveAttrE
+{
+public:
+    enum CurveType
+    {
+        UPType,
+        DwType
+    };
+
+    CurveAttrE(){ srand((unsigned)time(NULL)); }
+    ~CurveAttrE()
+    {
+        
+        for (int i = 0; i < m_CurveData.size();i++)
+        {
+            delete[] (*m_CurveData[i].trim_)[0];
+            delete[] (*m_CurveData[i].assist_)[0];
+        }
+        if (m_CurveData.size())
+        {
+            delete[] m_CurveData[0].trim_;
+            delete[] m_CurveData[0].assist_;
+        }
+        
+        m_CurveData.clear();
+    }
+    void writeAttrToCurves(std::vector<TrimCurveData>& curveSet, CurveType cae);
+
+    void getAtrrToCurves()
+    {
+        vector<tag_t> tempCurves;
+        getAllTrimCurves(tempCurves);
+        UF_initialize();
+        UF_ATTR_value_t value = {0};
+        vector<int> groupFlags;
+        vector<vector<tag_t>> tempGroupcurve;
+        int num;
+        for (int i = 0; i < tempCurves.size();i++) //先分组
+        {
+            UF_ATTR_read_value(tempCurves[i],const_cast<char*>(GroupFlagTitle), UF_ATTR_integer, &value);
+            for (num = 0; num < groupFlags.size();num++)
+                if (groupFlags[num]==value.value.integer)
+                    break;
+            if (num== groupFlags.size()||groupFlags.size()==0)
+                groupFlags.push_back(value.value.integer);
+            if (num== tempGroupcurve.size())
+                tempGroupcurve.push_back(vector<tag_t>());
+            tempGroupcurve[num].push_back(tempCurves[i]);
+        }
+        m_CurveData;
+        vector<tag_t>trim_s;
+        vector<tag_t>assist_s;
+        TrimCurveData tctemp = {0};
+        vector<CurveData*>* trim_p=new vector<CurveData*>[tempGroupcurve.size()];
+        vector<CurveData*>* assist_p = new vector<CurveData*>[tempGroupcurve.size()];
+        CurveData * tempCDs;
+
+        for (int i = 0; i < tempGroupcurve.size();i++)
+        {
+            trim_s.clear();
+            assist_s.clear();
+            for (int j = 0; j < tempGroupcurve[i].size();j++)
+            {
+                UF_ATTR_read_value(tempGroupcurve[i][j], const_cast<char*>(curveTypeTitle), UF_ATTR_string, &value);
+                if (value.value.string[2] == 'T')
+                    trim_s.push_back(tempGroupcurve[i][j]);
+                else
+                    assist_s.push_back(tempGroupcurve[i][j]);
+            }
+            tempCDs =new CurveData[trim_s.size()];
+            for (int n = 0; n < trim_s.size(); n++)
+            {
+                tempCDs[n].setData(trim_s[n]);
+                trim_p[i].push_back(&tempCDs[n]);
+            }
+            tempCDs = new CurveData[assist_s.size()];
+            for (int n = 0; n < assist_s.size(); n++)
+            {
+                tempCDs[n].setData(assist_s[n]);
+                assist_p[i].push_back(&tempCDs[n]);
+            }
+            tctemp.trim_ = &trim_p[i];
+            tctemp.assist_ = &assist_p[i];
+            m_CurveData.push_back(tctemp);
+        }
+    }
+private:
+    size_t getAllTrimCurves(vector<tag_t> &curves);
+
+private:
+    vector<TrimCurveData> m_CurveData;//一级指针有内容！！！
+    vector<CurveData> m_allTrimCurves;
+    static const char curveTypeTitle[64];//UF_ATTR_string
+    static const char UPAssist[64];
+    static const char UPTrime[64];
+    static const char DwAssist[64];
+    static const char DwTrim[64];
+    static const char GroupFlagTitle[64];//UF_ATTR_integer
+};
+
+
+
+
+#endif

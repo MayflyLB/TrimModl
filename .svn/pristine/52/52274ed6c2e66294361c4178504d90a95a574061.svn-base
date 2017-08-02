@@ -1,0 +1,65 @@
+#ifndef _CURTTERATTRE_H
+#define _CURTTERATTRE_H
+#include "../Include/assistFun.h"
+struct  TrimCurveData   //一级指针有内容！！！
+{
+    vector<CurveData*>* trim_;
+    vector<CurveData*>* assist_;
+};
+
+class CurveAttrE
+{
+public:
+    enum CurveType
+    {
+        UPType,
+        DwType
+    };
+
+    CurveAttrE(){ srand((unsigned)time(NULL)); }
+    ~CurveAttrE()
+    {
+        delelteCurveData();
+    }
+    void writeAttrToCurves(std::vector<TrimCurveData>& curveSet, CurveType cae);
+
+    void getAtrrToCurves();
+    vector<TrimCurveData>& retCurveData()
+    {
+        return m_CurveData;
+    }
+    vector<TrimCurveData>&operator()()
+    {
+        return m_CurveData;
+    }
+private:
+    size_t getAllTrimCurves(vector<tag_t> &curves);
+    void delelteCurveData()
+    {
+        for (int i = 0; i < m_CurveData.size(); i++)
+        {
+            delete[](*m_CurveData[i].trim_)[0];
+            delete[](*m_CurveData[i].assist_)[0];
+        }
+        if (m_CurveData.size())
+        {
+            delete[] m_CurveData[0].trim_;
+            delete[] m_CurveData[0].assist_;
+        }
+        m_CurveData.clear();
+    }
+private:
+    vector<TrimCurveData> m_CurveData;//一级指针有内容！！！
+    vector<CurveData> m_allTrimCurves;
+    static const char curveTypeTitle[64];//UF_ATTR_string
+    static const char UPAssist[64];
+    static const char UPTrime[64];
+    static const char DwAssist[64];
+    static const char DwTrim[64];
+    static const char GroupFlagTitle[64];//UF_ATTR_integer
+};
+
+
+
+
+#endif

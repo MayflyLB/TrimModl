@@ -1,0 +1,74 @@
+#ifndef _RETOFFSETSHEET_H
+#define _RETOFFSETSHEET_H
+#include "../Include/assistFun.h"
+
+
+struct SheetInfo
+{
+    tag_t id;
+    double offsetDist;
+};
+inline int findData(tag_t obj, char * title, int type/*= UF_ATTR_string*/)
+{
+    int title_type;
+    UF_ATTR_find_attribute(obj, type, title, &title_type);
+    return title_type;
+}
+
+//原片体用      ORGX ORGY ORGZ标题记录坐标
+//偏执片体用    OFFX OFFY OFFZ标题记录坐标
+class RetOffsetSheet//绝对坐标系下
+{
+public:
+    RetOffsetSheet(std::vector<tag_t> sheets,double offsetDist, double offsetDeviation = 0, double stepoverDeviation = 0, double *moveDir=NULL,double movedist=0);
+
+    tag_t retOffsetShet(double offsetDist,double v1 = 0, double v2 = 0);
+    ~RetOffsetSheet(){}
+private:
+    RetOffsetSheet(){}
+    RetOffsetSheet(const RetOffsetSheet&){}
+
+    bool has_offsetSheet(double offsetDist);
+
+    void setORGSheetInfo();
+
+    void setOffsetSheetInfo(double offsetDist);
+
+    void readORGSheetInfo();
+
+    void readOffsetSheetInfo(tag_t obj, double *pt,double &dist);
+
+    bool is_originSheet(tag_t tmep)
+    {
+        return UF_ATTR_real==findData(tmep,"ORGX", UF_ATTR_real);
+    }
+
+    bool is_offsetSheet(tag_t obj)
+    {
+        return UF_ATTR_real == findData(obj, "OFFX", UF_ATTR_real);
+    }
+
+private:
+
+    vector<tag_t> m_allSheets;
+    vector<SheetInfo> m_offsetSheets;
+    tag_t m_targerSheet;
+    tag_t m_retSheet;
+    double m_centerPt[3];
+
+
+
+
+    static const char OFFX[32];
+    static const char OFFY[32];
+    static const char OFFZ[32];
+    static const char ORGX[32];
+    static const char ORGY[32];
+    static const char ORGZ[32];
+    static const char OffsetDist[32];
+
+};
+
+
+
+#endif // _RETOFFSETSHEET_H

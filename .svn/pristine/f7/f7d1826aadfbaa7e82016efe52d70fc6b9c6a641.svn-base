@@ -1,0 +1,123 @@
+
+#ifndef IMPLEDITCURVES_H_
+#define IMPLEDITCURVES_H_
+
+#include <vector>
+#include <NXOpen/BlockStyler_SpecifyOrientation.hxx>
+#include "../Include/assistFun.h"
+#include "../Include/CurveAttrE.h"
+using namespace std;
+
+
+class MoveLines
+{
+public:
+    MoveLines(std::vector<TrimCurveData>&y) 
+    {
+        m_focusPt = nullptr;
+        m_pCurrentMovLines = nullptr;
+        index = 0;
+        for (int i = 0; i < y.size(); i++)
+        {
+            m_curves.push_back((*y[i].trim_)[0]);
+            for (int j=0;j<y[i].assist_->size();j++)
+            {
+                m_curves.push_back((*y[i].assist_)[j]);
+            }
+            m_curves.push_back((*y[i].trim_).back());
+        }
+        m_focusCurve = m_curves[0];
+        sortCurvesPointor(m_curves, m_Groups);
+    }
+    ~MoveLines(){}
+    void moveOper(NXOpen::BlockStyler::CurveCollector* curvesSelect, NXOpen::BlockStyler::SpecifyOrientation* manipulator)
+    {
+        if (curvesSelect==nullptr||manipulator==nullptr) return ;
+        tag_t temp = curvesSelect->GetSelectedObjects().at(0)->GetTag();
+        if (m_focusCurve->curve != temp)
+        {
+            int i=0;
+            for (i;i<m_curves.size();i++)
+            {
+                if (m_curves[i]->curve == temp)
+                    break;
+            }
+            if (i==m_curves.size())
+            {
+                std::vector<NXOpen::TaggedObject*> tempT;
+                tempT.push_back(NXOpen::NXObjectManager::Get(m_focusCurve->curve));
+                curvesSelect->SetSelectedObjects(tempT);
+            }
+            else
+                m_focusCurve = m_curves[i];
+        }
+        else
+        {
+            NXOpen::Point3d&& temp3D=manipulator->Origin();
+
+        }
+    }
+private:
+    std::vector<CurveData*>m_curves;
+    std::vector<std::vector<CurveData*>> m_Groups;
+    std::vector<CurveData*>*m_pCurrentMovLines;
+    CurveData* m_focusCurve;
+    double *m_focusPt;
+    int index;
+};
+
+
+
+class ImplEditCurves
+{
+public:
+    ImplEditCurves();
+    ~ImplEditCurves();
+    void doOper(NXOpen::BlockStyler::CurveCollector* curvesSelect, NXOpen::BlockStyler::SpecifyVector* cutDir);
+private:
+    void deleteTempCDVSET()
+    {
+        if (m_tempCDVSET)
+        {
+            for (int i = 0; i < m_trimCurvesGroupUP.size(); i++)
+                delete[] m_tempCDVSET[i][0];
+            delete[] m_tempCDVSET;
+            m_tempCDVSET = nullptr;
+        }
+
+    }
+    
+    
+    template<class T>
+    void deletePointerSet(vector<T*>&temp);
+    bool hasSpline();
+    void simplifySpline();
+    void GenerateAssistLines(NXOpen::BlockStyler::SpecifyVector* cutDir);
+
+protected:
+    std::vector<CurveData*> m_pTrimCurves;                      //need delete
+    std::vector<vector<CurveData*>> m_trimCurvesGroupUP;        //存指针需要delete，存对象不用delete
+
+    std::vector<tag_t> m_allTrimCurves;
+
+    std::vector<CurveData*> m_pAssistCurves;                    //need delete 加入两条修边线
+    std::vector<vector<CurveData*>*> m_assistCurvesTempGroup;   //need delete!
+
+    std::vector<TrimCurveData> m_trimCurveDataUP;
+    std::vector<TrimCurveData> m_trimCurveDataDW;
+
+    std::vector<vector<CurveData*>> m_assistCurvesGroup;
+    std::vector<tag_t> m_tempSplines;
+
+    vector<CurveData*>* m_tempCDVSET;
+    CurveAttrE m_attr;
+    CurveData* m_pCur_CD;
+    CurveData* m_pPost_CD;
+    CurveData m_editCD1;
+    CurveData m_editCD2;
+
+    Vector3d m_cutDir;
+    bool m_hasSpline;
+    int m_color;
+};
+#endif

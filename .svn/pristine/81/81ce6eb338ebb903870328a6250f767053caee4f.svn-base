@@ -1,0 +1,211 @@
+#include "RetOffsetSheet.h"
+
+
+static bool hasData(tag_t &obj)
+{
+    int nItem = -1;
+    UF_ATTR_count_attributes(obj, UF_ATTR_any, &nItem);
+    if (nItem > 0)
+        return true;
+    else
+        return false;
+}
+
+static int findData(tag_t obj, char * title, int type/*= UF_ATTR_string*/)
+{
+    int title_type;
+    UF_ATTR_find_attribute(obj, type, title, &title_type);
+    return title_type;
+}
+
+static bool writeData(tag_t obj, char* title, int type, void * attr)
+{
+    UF_ATTR_value_t values;
+    UF_ATTR_find_attribute(obj, type, title, &values.type);
+    if (values.type)
+        return false;
+    values.type = type;
+    memset(&values.value, 0, sizeof(values.value));
+    if (type == UF_ATTR_bool)
+        memcpy(&values.value, attr, 1);
+    else if (type == UF_ATTR_string || type == UF_ATTR_real || type == UF_ATTR_time || type == UF_ATTR_reference)
+        memcpy(&values.value, attr, 8);
+    else if (type == UF_ATTR_integer)
+        memcpy(&values.value, attr, 4);
+    UF_CALL(UF_ATTR_assign(obj, title, values));
+    return true;
+}
+
+static UF_ATTR_value_s readData(tag_t obj, char * title, int type /*= UF_ATTR_string*/) //c++
+{
+    UF_ATTR_value_s  ret = { 0 };
+    UF_ATTR_read_value(obj, title, type, &ret);
+    return ret;
+}
+
+
+
+
+RetOffsetSheet::RetOffsetSheet(std::vector<tag_t> sheets, double offsetDist, double offsetDeviation /*= 0*/, double stepoverDeviation /*= 0*/, double *moveDir/*=NULL*/, double movedist/*=0*/)
+{
+    //sheets个数大于1，等于1不同处理
+    UF_INITIALIZE();
+    if (sheets.size() == 1)
+    {
+        m_targerSheet = sheets[0];
+        if (is_originSheet(m_targerSheet))
+        {
+            readORGSheetInfo();
+            getAllSheets(m_allSheets);
+        }
+        else
+        {
+            MyFun::CSolidObj temp(m_targerSheet);
+            UF_VEC3_midpt(temp.m_topCenter, temp.m_bottomCenter, m_centerPt);
+            setORGSheetInfo();
+            m_retSheet = offsetSheet(m_targerSheet, offsetDist, offsetDeviation, stepoverDeviation);
+            setOffsetSheetInfo(offsetDist);
+            if (movedist&&moveDir)
+            {
+                m_retSheet = MyFun::moveObj(m_retSheet, moveDir, movedist, false);
+            }
+            SheetInfo temps = { m_retSheet ,offsetDist };
+            m_offsetSheets.push_back(temps);
+        }
+    }
+    else
+    {
+        m_targerSheet = sewSheets(sheets);
+        MyFun::CSolidObj temp(m_targerSheet);
+        UF_VEC3_midpt(temp.m_topCenter, temp.m_bottomCenter, m_centerPt);
+        setORGSheetInfo();
+        m_retSheet = offsetSheet(m_targerSheet, offsetDist, offsetDeviation, stepoverDeviation);
+        UF_OBJ_set_color(m_retSheet, 36);
+        setOffsetSheetInfo(offsetDist);
+
+        if (movedist&&moveDir)
+        {
+            m_retSheet = MyFun::moveObj(m_retSheet, moveDir, movedist, false);
+        }
+        SheetInfo temps = { m_retSheet ,offsetDist };
+        m_offsetSheets.push_back(temps);
+        //has_offsetSheet = false;
+    }
+}
+
+tag_t RetOffsetSheet::retOffsetShet(double offsetDist, double v1 /*= 0*/, double v2 /*= 0*/)
+{
+    if (has_offsetSheet(offsetDist))
+        return m_retSheet;
+    else
+    {
+        m_retSheet = offsetSheet(m_targerSheet, offsetDist, v1, v2);
+        setOffsetSheetInfo(offsetDist);
+        SheetInfo temp = { m_retSheet ,offsetDist };
+        m_offsetSheets.push_back(temp);
+        return m_retSheet;
+    }
+}
+
+bool RetOffsetSheet::has_offsetSheet(double offsetDist)
+{
+    double pt[3];
+    double dist;
+    m_retSheet = 0;
+    if (m_offsetSheets.size() == 0)
+        for (int i = 0; i < m_allSheets.size(); i++)
+        {
+            if (m_allSheets[i] != m_targerSheet)
+            {
+                readOffsetSheetInfo(m_allSheets[i], pt, dist);
+                if (MyFun::is_Equal(pt, m_centerPt, .001))
+                {
+                    SheetInfo temp = { m_allSheets[i],offsetDist };
+                    m_offsetSheets.push_back(temp);
+                }
+            }
+        }
+    for (int i = 0; i < m_offsetSheets.size(); i++)
+    {
+        if (fabs(dist - m_offsetSheets[i].offsetDist) < 0.001)
+        {
+            m_retSheet = m_offsetSheets[i].id;
+            break;
+        }
+    }
+
+    if (m_retSheet)
+        return true;
+    else
+        return false;
+}
+
+void RetOffsetSheet::readOffsetSheetInfo(tag_t obj, double *pt, double &dist)
+{
+    UF_INITIALIZE();
+    if (is_offsetSheet(obj))
+    {
+        UF_ATTR_value_s  value = { 0 };
+        UF_ATTR_read_value(obj, const_cast<char*> (OFFX), UF_ATTR_real, &value);
+        pt[0] = value.value.real;
+        UF_ATTR_read_value(obj, const_cast<char*> (OFFY), UF_ATTR_real, &value);
+        pt[1] = value.value.real;
+        UF_ATTR_read_value(obj, const_cast<char*> (OFFZ), UF_ATTR_real, &value);
+        pt[2] = value.value.real;
+        UF_ATTR_read_value(obj, const_cast<char*> (OffsetDist), UF_ATTR_real, &value);
+        dist = value.value.real;
+    }
+    else
+    {
+        memset(pt, 0, 3 * sizeof(double));
+        dist = 0;
+    }
+}
+
+void RetOffsetSheet::setOffsetSheetInfo(double offsetDist)
+{
+    UF_INITIALIZE();
+    UF_ATTR_value_t value;
+    value.type = UF_ATTR_real;
+    value.value.real = m_centerPt[0];
+    UF_CALL(UF_ATTR_assign(m_retSheet, const_cast<char*> (OFFX), value));
+    value.value.real = m_centerPt[1];
+    UF_CALL(UF_ATTR_assign(m_retSheet, const_cast<char*> (OFFY), value));
+    value.value.real = m_centerPt[2];
+    UF_CALL(UF_ATTR_assign(m_retSheet, const_cast<char*> (OFFZ), value));
+    value.value.real = offsetDist;                       
+    UF_CALL(UF_ATTR_assign(m_retSheet, const_cast<char*> (OffsetDist), value));
+}
+
+void RetOffsetSheet::setORGSheetInfo()
+{
+    UF_INITIALIZE();
+    UF_ATTR_value_t value;
+    value.type = UF_ATTR_real;
+    value.value.real = m_centerPt[0];
+    UF_CALL(UF_ATTR_assign(m_targerSheet, const_cast<char*> (ORGX), value));
+    value.value.real = m_centerPt[1];                       
+    UF_CALL(UF_ATTR_assign(m_targerSheet, const_cast<char*> (ORGY), value));
+    value.value.real = m_centerPt[2];                      
+    UF_CALL(UF_ATTR_assign(m_targerSheet, const_cast<char*> (ORGZ), value));
+}
+
+void RetOffsetSheet::readORGSheetInfo()
+{
+    UF_INITIALIZE();
+    UF_ATTR_value_s  value = { 0 };
+    UF_CALL(UF_ATTR_read_value(m_targerSheet, const_cast<char*> (ORGX), UF_ATTR_real, &value));
+    m_centerPt[0] = value.value.real;                           
+    UF_CALL(UF_ATTR_read_value(m_targerSheet, const_cast<char*> (ORGY), UF_ATTR_real, &value));
+    m_centerPt[1] = value.value.real;                          
+    UF_CALL(UF_ATTR_read_value(m_targerSheet, const_cast<char*> (ORGZ), UF_ATTR_real, &value));
+    m_centerPt[2] = value.value.real;
+}
+
+const char RetOffsetSheet::OFFX[32]="OFFX";
+const char RetOffsetSheet::OFFY[32]="OFFY";
+const char RetOffsetSheet::OFFZ[32]="OFFZ";
+const char RetOffsetSheet::ORGX[32]="ORGX";
+const char RetOffsetSheet::ORGY[32]="ORGY";
+const char RetOffsetSheet::ORGZ[32]="ORGZ";
+const char RetOffsetSheet::OffsetDist[32]="OffsetDist";

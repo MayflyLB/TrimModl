@@ -1,0 +1,58 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SteelInsertTrimming", "SteelInsertTrimming\SteelInsertTrimming.vcxproj", "{7BDF1FB7-1FC7-4963-BCE8-B2CD8F3F6520}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestFun", "TestFun\TestFun\TestFun.vcxproj", "{DF7D9921-26AF-45E8-A9AC-83A056EBFCC8}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EditTrimCurves", "EditTrimCurves\EditTrimCurves.vcxproj", "{1192B4C5-DE90-4601-B724-FE551985E03D}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test_c", "test_c\test_c.vcxproj", "{296022D2-44C7-48F5-B838-B5D6217E25B6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|x64 = Debug|x64
+		Release|Win32 = Release|Win32
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7BDF1FB7-1FC7-4963-BCE8-B2CD8F3F6520}.Debug|Win32.ActiveCfg = Debug|Win32
+		{7BDF1FB7-1FC7-4963-BCE8-B2CD8F3F6520}.Debug|Win32.Build.0 = Debug|Win32
+		{7BDF1FB7-1FC7-4963-BCE8-B2CD8F3F6520}.Debug|x64.ActiveCfg = Debug|x64
+		{7BDF1FB7-1FC7-4963-BCE8-B2CD8F3F6520}.Debug|x64.Build.0 = Debug|x64
+		{7BDF1FB7-1FC7-4963-BCE8-B2CD8F3F6520}.Release|Win32.ActiveCfg = Release|Win32
+		{7BDF1FB7-1FC7-4963-BCE8-B2CD8F3F6520}.Release|Win32.Build.0 = Release|Win32
+		{7BDF1FB7-1FC7-4963-BCE8-B2CD8F3F6520}.Release|x64.ActiveCfg = Release|x64
+		{7BDF1FB7-1FC7-4963-BCE8-B2CD8F3F6520}.Release|x64.Build.0 = Release|x64
+		{DF7D9921-26AF-45E8-A9AC-83A056EBFCC8}.Debug|Win32.ActiveCfg = Debug|Win32
+		{DF7D9921-26AF-45E8-A9AC-83A056EBFCC8}.Debug|Win32.Build.0 = Debug|Win32
+		{DF7D9921-26AF-45E8-A9AC-83A056EBFCC8}.Debug|x64.ActiveCfg = Debug|x64
+		{DF7D9921-26AF-45E8-A9AC-83A056EBFCC8}.Debug|x64.Build.0 = Debug|x64
+		{DF7D9921-26AF-45E8-A9AC-83A056EBFCC8}.Release|Win32.ActiveCfg = Release|Win32
+		{DF7D9921-26AF-45E8-A9AC-83A056EBFCC8}.Release|Win32.Build.0 = Release|Win32
+		{DF7D9921-26AF-45E8-A9AC-83A056EBFCC8}.Release|x64.ActiveCfg = Release|x64
+		{DF7D9921-26AF-45E8-A9AC-83A056EBFCC8}.Release|x64.Build.0 = Release|x64
+		{1192B4C5-DE90-4601-B724-FE551985E03D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{1192B4C5-DE90-4601-B724-FE551985E03D}.Debug|Win32.Build.0 = Debug|Win32
+		{1192B4C5-DE90-4601-B724-FE551985E03D}.Debug|x64.ActiveCfg = Debug|x64
+		{1192B4C5-DE90-4601-B724-FE551985E03D}.Debug|x64.Build.0 = Debug|x64
+		{1192B4C5-DE90-4601-B724-FE551985E03D}.Release|Win32.ActiveCfg = Release|Win32
+		{1192B4C5-DE90-4601-B724-FE551985E03D}.Release|Win32.Build.0 = Release|Win32
+		{1192B4C5-DE90-4601-B724-FE551985E03D}.Release|x64.ActiveCfg = Release|x64
+		{1192B4C5-DE90-4601-B724-FE551985E03D}.Release|x64.Build.0 = Release|x64
+		{296022D2-44C7-48F5-B838-B5D6217E25B6}.Debug|Win32.ActiveCfg = Debug|Win32
+		{296022D2-44C7-48F5-B838-B5D6217E25B6}.Debug|Win32.Build.0 = Debug|Win32
+		{296022D2-44C7-48F5-B838-B5D6217E25B6}.Debug|x64.ActiveCfg = Debug|x64
+		{296022D2-44C7-48F5-B838-B5D6217E25B6}.Debug|x64.Build.0 = Debug|x64
+		{296022D2-44C7-48F5-B838-B5D6217E25B6}.Release|Win32.ActiveCfg = Release|Win32
+		{296022D2-44C7-48F5-B838-B5D6217E25B6}.Release|Win32.Build.0 = Release|Win32
+		{296022D2-44C7-48F5-B838-B5D6217E25B6}.Release|x64.ActiveCfg = Release|x64
+		{296022D2-44C7-48F5-B838-B5D6217E25B6}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

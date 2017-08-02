@@ -1,0 +1,169 @@
+#ifndef UPPERSTEELINSERTTRIMMING_H_INCLUDED
+#define UPPERSTEELINSERTTRIMMING_H_INCLUDED
+
+//------------------------------------------------------------------------------
+//These includes are needed for the following template code
+//------------------------------------------------------------------------------
+#include <uf_defs.h>
+#include <uf_ui_types.h>
+#include <iostream>
+#include <NXOpen/Session.hxx>
+#include <NXOpen/UI.hxx>
+#include <NXOpen/NXMessageBox.hxx>
+#include <NXOpen/Callback.hxx>
+#include <NXOpen/NXException.hxx>
+#include <NXOpen/BlockStyler_UIBlock.hxx>
+#include <NXOpen/BlockStyler_BlockDialog.hxx>
+#include <NXOpen/BlockStyler_PropertyList.hxx>
+#include <NXOpen/BlockStyler_Group.hxx>
+#include <NXOpen/BlockStyler_BodyCollector.hxx>
+#include <NXOpen/BlockStyler_Toggle.hxx>
+#include <NXOpen/BlockStyler_DoubleBlock.hxx>
+#include <NXOpen/BlockStyler_CurveCollector.hxx>
+#include <NXOpen/BlockStyler_SpecifyVector.hxx>
+#include <NXOpen/BlockStyler_SpecifyPoint.hxx>
+#include <NXOpen/BlockStyler_Enumeration.hxx>
+#include <NXOpen/BlockStyler_SpecifyOrientation.hxx>
+#include <NXOpen/BlockStyler_Button.hxx>
+#include <NXOpen/BlockStyler_LinearDimension.hxx>
+#include <NXOpen/BlockStyler_Label.hxx>
+
+#include "../include/CommonOperation.h"
+
+#include <vector>
+#include "../../../include/PublicFun.h"
+#include "../include/assistFun.h"
+
+using namespace std;
+using namespace NXOpen;
+using namespace NXOpen::BlockStyler;
+
+template class DllExport std::allocator<NXOpen::TaggedObject *>;
+template class DllExport std::vector<NXOpen::TaggedObject *, allocator<NXOpen::TaggedObject *>>;
+
+struct LineData 
+{
+	UF_CURVE_line_t lt1;
+	UF_CURVE_line_t lt2;
+	UF_CURVE_line_t ltStart;
+	UF_CURVE_line_t ltEnd;
+	double midpt[3];
+	tag_t line1;
+	tag_t line2;
+	tag_t lineStart;
+	tag_t lineEnd;
+};
+
+class DllExport ScrapSteelInsertTrimming
+{
+	// class members
+public:
+	static Session *theSession;
+
+	static UI *theUI;
+	ScrapSteelInsertTrimming();
+	~ScrapSteelInsertTrimming();
+	int Show();
+
+	void initialize_cb();
+	void dialogShown_cb();
+	int apply_cb();
+	int ok_cb();
+	int update_cb(NXOpen::BlockStyler::UIBlock* block);
+	PropertyList* GetBlockProperties(const char *blockID);
+private:
+	void movePosEx();//斜向生成
+	void adjustLineData(tag_t & line,UF_CURVE_line_t& lt);//直接添加m_comOpr.m_assistLD
+	void adjustPosDir();
+
+
+	void setValue()
+	{
+		if (m_isInitial == false)
+		{
+			m_isInitial = !m_isInitial;
+			m_Opr.initialParamDST();
+			m_Opr.st_cutShapeBlank =  2;
+			m_Opr.st_cutShapeWide =20;
+			NXOpen::Vector3d vector1(0, 0, 0);
+			cutDir->SetVector(vector1);
+			m_Opr.st_isPlaneCut = true;
+			label0->SetShow(true);
+			sheetOffsetDist->SetValue(m_Opr.m_sheetOffsetDist);
+			curveOffsetDist->SetValue(m_Opr.m_curveOffset);
+			upOrDownDatums->SetValue(m_Opr.m_is0ffsetCol);
+			cutDirCutLen->SetValue(m_Opr.st_cutDirCutLen);
+			cutDirToolBlank->SetValue(m_Opr.st_cutDirToolBlank);
+			cutShapeWide->SetValue(m_Opr.st_cutShapeWide);
+			cutShapeBlank->SetValue(m_Opr.st_cutShapeBlank);
+			cutDeltaLen->SetValue(m_Opr.st_cutDirDeltaLen);
+		}
+	}
+	void getValue()
+	{
+		m_Opr.st_cutDirCutLen = 0;
+		m_Opr.st_cutDirToolBlank = 0;
+		m_Opr.st_cutShapeWide = 0;
+		m_Opr.st_cutShapeBlank = 0;
+		m_Opr.st_cutDirDeltaLen = 0;
+		m_Opr.m_sheetOffsetDist=sheetOffsetDist->Value();
+		m_Opr.m_curveOffset = curveOffsetDist->Value();
+		m_Opr.m_is0ffsetCol = upOrDownDatums->Value();
+		m_Opr.st_cutDirCutLen = cutDirCutLen->Value();
+		m_Opr.st_cutDirToolBlank = cutDirToolBlank->Value();
+		m_Opr.st_cutShapeWide = cutShapeWide->Value();
+		m_Opr.st_cutShapeBlank = cutShapeBlank->Value();
+		m_Opr.st_cutDirDeltaLen = cutDeltaLen->Value();
+	}
+	enum MyEnumAssist
+	{
+		TANGENT = 0,
+		RIGHT = 1
+	};
+
+private:
+
+	const char* theDlxFileName;
+	NXOpen::BlockStyler::BlockDialog* theDialog;
+	NXOpen::BlockStyler::Group* group;// Block type: Group
+	NXOpen::BlockStyler::BodyCollector* selectSheet;// Block type: Body Collector
+	NXOpen::BlockStyler::Toggle* upOrDownDatums;// Block type: Toggle
+	NXOpen::BlockStyler::DoubleBlock* sheetOffsetDist;// Block type: Double
+	NXOpen::BlockStyler::DoubleBlock* curveOffsetDist;// Block type: Double
+	NXOpen::BlockStyler::Group* groupGernate;// Block type: Group
+	NXOpen::BlockStyler::CurveCollector* curvesSelect;// Block type: Curve Collector
+	NXOpen::BlockStyler::SpecifyVector* cutDir;// Block type: Specify Vector
+	NXOpen::BlockStyler::SpecifyPoint* assistStartPt;// Block type: Specify Point
+	NXOpen::BlockStyler::Button* buttonDirType;// Block type: Button
+	NXOpen::BlockStyler::DoubleBlock* assistLineLength;// Block type: Double
+	NXOpen::BlockStyler::SpecifyOrientation* pos;// Block type: Specify Orientation
+	NXOpen::BlockStyler::Button* UndoButton;// Block type: Button
+	NXOpen::BlockStyler::Button* assistButton;// Block type: Button
+	NXOpen::BlockStyler::Group* groupParam;// Block type: Group
+	NXOpen::BlockStyler::DoubleBlock* cutDeltaLen;// Block type: Double
+	NXOpen::BlockStyler::DoubleBlock* height;// Block type: Double
+	NXOpen::BlockStyler::DoubleBlock* cutDirCutLen;// Block type: Double
+	NXOpen::BlockStyler::DoubleBlock* cutDirToolBlank;// Block type: Double
+	NXOpen::BlockStyler::DoubleBlock* cutShapeWide;// Block type: Double
+	NXOpen::BlockStyler::DoubleBlock* cutShapeBlank;// Block type: Double
+	NXOpen::BlockStyler::Group* groupAssist;// Block type: Group
+	NXOpen::BlockStyler::LinearDimension* faceDim;// Block type: Linear Dim
+	NXOpen::BlockStyler::SpecifyVector* adjustDir;// Block type: Specify Vector
+	NXOpen::BlockStyler::SpecifyPoint* adjustPt;// Block type: Specify Point
+	NXOpen::BlockStyler::Label* label0;// Block type: Label
+
+	CommonOperation m_Opr;
+	bool m_isInitial;//是否初始化
+	double m_axisPt[3];//画出的轴方向的起点
+	tag_t m_axisT;//轴tag_t 方向切削方向.
+	double m_assistDir[3];//辅助线生成方向(pos方向)
+	MyEnumAssist m_typeAssist;// 切向生成 正向生成
+	int m_trimCol ;
+	int m_oneOpr;//定点起始事设为零,如果Trim线不是直线,创建新的线,否则标记为Trim的直线最短不能短于1mm
+	tag_t csys_id;
+	tag_t curr_sys;
+	bool is_Trun;
+	bool is_onceProCutdir;
+	bool is_buttonDirType;
+};
+#endif //UPPERSTEELINSERTTRIMMING_H_INCLUDED

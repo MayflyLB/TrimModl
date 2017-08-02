@@ -1,0 +1,476 @@
+
+#ifndef IMPLEDITCURVES_H_
+#define IMPLEDITCURVES_H_
+
+#include <vector>
+#include <NXOpen/BlockStyler_SpecifyOrientation.hxx>
+#include "../Include/assistFun.h"
+#include "../Include/CurveAttrE.h"
+using namespace std;
+
+
+class EditLines
+{
+public:
+    EditLines(std::vector<TrimCurveData>&x, std::vector<TrimCurveData>&y,NXOpen::BlockStyler::CurveCollector* curvesSelect, NXOpen::BlockStyler::SpecifyOrientation* manipulator,NXOpen::Vector3d tempDir):m_curvesSelect(curvesSelect), m_manipulator(manipulator)
+    {
+        m_focusPt = nullptr;
+        m_pCurrentMovLines = nullptr;
+        m_cutDir = tempDir;
+        for (int i = 0; i < y.size(); i++)
+        {
+            m_curves.push_back((*y[i].trim_)[0]);
+            for (int j=0;j<y[i].assist_->size();j++)
+                m_curves.push_back((*y[i].assist_)[j]);
+            m_curves.push_back((*y[i].trim_).back());
+        }
+        for (int i = 0; i < x.size(); i++)
+        {
+            m_curves.push_back((*x[i].trim_)[0]);
+            for (int j = 0; j < x[i].assist_->size(); j++)
+                m_curves.push_back((*x[i].assist_)[j]);
+            m_curves.push_back((*x[i].trim_).back());
+        }
+        m_focusCurve0 = nullptr;
+        m_focusCurve1 = nullptr;
+        m_focusCurve2 = nullptr;
+        sortCurvesPointor(m_curves, m_Groups);
+        for (int i=0;i<m_Groups.size();i++)
+        {
+            m_Groups[i][0]->swap();//两端的修边线方向修正为射向开口端.
+        }
+    }
+    ~EditLines(){}
+    void moveOper()
+    {
+        if (m_curvesSelect==nullptr|| m_manipulator==nullptr) return ;
+        tag_t temp = 0;
+        if (m_curvesSelect->GetSelectedObjects().size())
+            temp=m_curvesSelect->GetSelectedObjects().at(0)->GetTag();
+        else
+            return;
+        if (m_focusCurve1==nullptr||m_focusCurve1->curve != temp&&temp!=0)
+        {
+            bool flag = true;
+            for ( int i=0;i<m_Groups.size();i++)
+            {
+                for (int j=0;j<m_Groups[i].size();j++)
+                {
+                    if (m_Groups[i][j]->curve == temp)
+                    {
+                        m_pCurrentMovLines = &m_Groups[i];
+                        if (j>0) m_focusCurve0 = m_Groups[i][j-1];
+                        else m_focusCurve0 = nullptr;
+                        m_focusCurve1 = m_Groups[i][j];
+                        if (j + 1 < m_Groups[i].size()) m_focusCurve2 = m_Groups[i][j + 1];
+                        else m_focusCurve2 = nullptr;
+
+                        m_focusPt = m_focusCurve1->end_point;
+
+                        m_manipulator->SetOrigin(m_focusCurve1->end_point);
+                        m_manipulator->SetXAxis(m_focusCurve1->dir_Center);
+                        double y[3];
+                        UF_VEC3_cross(m_focusCurve1->dir_Center,m_cutDir,y);
+                        m_manipulator->SetYAxis(y);
+
+                        flag = false;
+                        break;
+                    }
+                }
+            }
+            if (flag)
+            {
+                std::vector<NXOpen::TaggedObject*> tempT;
+                tempT.push_back(NXOpen::NXObjectManager::Get(m_focusCurve1->curve));
+                m_curvesSelect->SetSelectedObjects(tempT);
+            }
+        }
+        else
+        {
+            NXOpen::Point3d && tempOrigin= m_manipulator->Origin();
+            NXOpen::Vector3d && tempDir = m_manipulator->XAxis();
+            UF_VEC3_copy(m_focusCurve1->retMidPt(), m_midPt);
+            if (MyFun::is_Equal(m_midPt, tempOrigin, 0.001))//旋转判断(修边线只能延长)
+            {
+                m_focusPt = m_midPt;
+                if (m_focusCurve0&&m_focusCurve2)
+                {
+                    int status;
+                    
+                    UF_VEC3_is_parallel(tempDir, m_focusCurve1->dir_Center, 0.001, &status);
+                    if (status)
+                    {
+                        m_manipulator->SetOrigin(m_focusPt);
+                        m_manipulator->SetYAxis(m_focusCurve1->dir_Center);
+                        double y[3];
+                        UF_VEC3_cross(m_focusCurve1->dir_Center, m_cutDir, y);
+                        m_manipulator->SetXAxis(y);
+                        return;
+                    }
+                    UF_VEC3_copy(tempDir,m_focusCurve1->dir_Center);
+                    if (m_focusCurve0)
+                    {
+                        UF_VEC3_is_parallel(tempDir, m_focusCurve0->dir_Center,0.001,&status);
+                        if (status==0) 
+                            MyFun::intersectPtOfLines_(m_focusCurve0->dir_Center, m_focusCurve0->vertexPt, m_focusCurve1->dir_Center, m_focusCurve1->vertexPt, m_focusCurve1->start_point);
+                        UF_VEC3_copy(m_focusCurve1->start_point, m_focusCurve0->end_point);
+                        UF_VEC3_copy(m_focusCurve0->end_point, m_focusCurve0->vertexPt);
+                        m_focusCurve0 -> reEditLine();
+                    }
+                    if (m_focusCurve2)
+                    {
+                        UF_VEC3_is_parallel(tempDir, m_focusCurve2->dir_Center, 0.001, &status);
+                        if (status == 0)
+                            MyFun::intersectPtOfLines_(m_focusCurve2->dir_Center, m_focusCurve2->vertexPt, m_focusCurve1->dir_Center, m_focusCurve1->vertexPt, m_focusCurve1->end_point);
+                        UF_VEC3_copy(m_focusCurve1->end_point, m_focusCurve2->start_point);
+                        m_focusCurve0->reEditLine();
+                    }
+                    UF_VEC3_copy(m_focusCurve1->end_point, m_focusCurve1->vertexPt);
+                    m_focusCurve1->reEditLine();
+                }
+                else//是修边线固定 轴线
+                {
+                    m_manipulator->SetOrigin(m_focusCurve1->end_point);
+                    m_manipulator->SetXAxis(m_focusCurve1->dir_Center);
+                }
+            }
+            else//移动和拉长. 拉长 方向同向 移动 方向垂直
+            {//先确定是否是第一移动方位
+                if (MyFun::is_Equal(tempOrigin, m_focusCurve1->end_point,0.001))
+                {
+                    m_focusPt = m_focusCurve1->end_point;
+                    m_manipulator->SetOrigin(m_focusPt);
+                    m_manipulator->SetXAxis(m_focusCurve1->dir_Center);
+                    double y[3];
+                    UF_VEC3_cross(m_focusCurve1->dir_Center, m_cutDir, y);
+                    m_manipulator->SetYAxis(y);
+                    return;
+                }
+                else if (MyFun::is_Equal(tempOrigin, m_focusCurve1->start_point, 0.001))
+                {
+                    m_focusPt = m_focusCurve1->start_point;
+                    m_manipulator->SetOrigin(m_focusPt);
+                    m_manipulator->SetXAxis(-Vector3d(m_focusCurve1->dir_Center));
+                    double y[3];
+                    UF_VEC3_cross(m_focusCurve1->dir_Center, m_cutDir, y);
+                    m_manipulator->SetYAxis(y);
+                    return;
+                }
+                else
+                {
+                    UF_VEC3_copy(tempOrigin, m_focusPt);
+                    int status;
+                    UF_VEC3_is_parallel(tempDir, m_focusCurve1->dir_Center, 0.001, &status);
+                    if (status)//拉长
+                    {
+                        CurveData* temp;
+                        if (m_focusPt==m_focusCurve1->start_point)
+                        {
+                            temp = m_focusCurve0;
+                            UF_VEC3_copy(m_focusPt, temp->end_point);
+                        }
+                        else
+                        {
+                            temp = m_focusCurve2;
+                            UF_VEC3_copy(m_focusPt, temp->start_point);
+                            UF_VEC3_copy(m_focusPt, m_focusCurve1->vertexPt);
+                        }
+                        temp->reEditLine();
+                        m_focusCurve1->reEditLine();
+                        UF_VEC3_copy(temp->end_point, temp->vertexPt);
+                        
+                    }
+                    else//移动
+                    {
+                        MyFun::intersectPtOfLines_(m_focusCurve0->dir_Center, m_focusCurve0->vertexPt, m_focusCurve1->dir_Center, tempOrigin, m_focusCurve1->start_point);
+                        UF_VEC3_copy(m_focusCurve1->start_point,m_focusCurve0->end_point);
+                        m_focusCurve0->reEditLine();
+                        UF_VEC3_copy(m_focusCurve0->end_point, m_focusCurve0->vertexPt);
+
+                        MyFun::intersectPtOfLines_(m_focusCurve2->dir_Center, m_focusCurve2->vertexPt, m_focusCurve1->dir_Center, tempOrigin, m_focusCurve1->end_point);
+                        UF_VEC3_copy(m_focusCurve1->end_point, m_focusCurve2->start_point);
+                        m_focusCurve2->reEditLine();
+
+                        m_focusCurve1->reEditLine();
+                        UF_VEC3_copy(m_focusCurve1->end_point, m_focusCurve1->vertexPt);
+                    }
+                }
+            }
+        }
+    }
+private:
+    NXOpen::BlockStyler::CurveCollector* m_curvesSelect;
+    NXOpen::BlockStyler::SpecifyOrientation* m_manipulator;
+
+    std::vector<CurveData*>m_curves;
+    std::vector<std::vector<CurveData*>> m_Groups;
+    std::vector<CurveData*>*m_pCurrentMovLines;
+    CurveData* m_focusCurve0;
+    CurveData* m_focusCurve1;
+    CurveData* m_focusCurve2;
+    double *m_focusPt;
+    double m_midPt[3];
+    NXOpen::Vector3d m_cutDir;
+};
+
+class GenerateDir
+{
+public:
+    ~GenerateDir()
+    {
+        DELETE_VECTOR_OBJS(m_tempAxiss);
+    }
+    GenerateDir(const GenerateDir & g_dir)
+    {
+        m_dir=g_dir.m_dir;
+        m_dir_= g_dir.m_dir_;
+        m_axis = g_dir.m_axis;
+        is_Include = g_dir.is_Include;
+    }
+    GenerateDir(const Vector3d &dir_,const double *pt)
+    {
+       m_axis= createAxis(dir_,pt);
+       m_tempAxiss.push_back(m_axis);
+       m_dir_=m_dir = dir_;
+       is_Include = false;
+       m_origin = pt;
+    }
+    GenerateDir& operator=(const GenerateDir& g_dir)
+    {
+        if (this!=&g_dir)
+        {
+            m_dir = g_dir.m_dir;
+            m_dir_ = g_dir.m_dir_;
+            m_axis = g_dir.m_axis;
+            is_Include = g_dir.is_Include;
+        }
+        return *this;
+    }
+    bool operator==(const Point3d& pt)
+    {
+        if (m_origin == pt)
+            return true;
+        else
+            return false;
+    }
+    bool operator==(const Vector3d & vdir)
+    {
+        if (m_dir == vdir)
+            return true;
+        else
+            return false;
+    }
+    bool operator!=(const Vector3d & vdir)
+    {
+        if (m_dir == vdir)
+            return false;
+        else
+            return true;
+    }
+
+    operator tag_t()
+    {
+        return m_axis;
+    }
+    operator const tag_t()const 
+    {
+        return m_axis;
+    }
+    operator double*()
+    {
+        return reinterpret_cast<double *>((double*)m_dir);
+    }
+    operator const double*()const 
+    {
+        return reinterpret_cast<const double *>((const double*)m_dir);
+    }
+
+    void setDir(const double *dir)
+    {
+        UF_INITIALIZE();
+        UF_OBJ_set_blank_status(m_axis,UF_OBJ_BLANKED);
+        m_dir = dir;
+        m_axis = createAxis(m_dir, m_origin);
+        m_tempAxiss.push_back(m_axis);
+    }
+    bool is_Syntropy(const Vector3d&dir)
+    {
+        return  m_dir_ == dir;
+    }
+private:
+    GenerateDir()
+    {
+        is_Include = false;
+        m_axis = 0;
+    }
+private:
+    Vector3d m_dir;
+    tag_t m_axis;
+    vector<tag_t> m_tempAxiss;
+    Point3d m_origin;
+    bool is_Include;//false(默认值) 为直接短距生成辅助线 true 为长距生成辅助线. int TODO
+    Vector3d m_dir_;
+
+};
+
+
+class ImplEditCurves
+{
+public:
+    ImplEditCurves(NXOpen::BlockStyler::CurveCollector* curvesSelect,NXOpen::BlockStyler::SpecifyVector* cutDir);
+    ~ImplEditCurves(); 
+    void sortedArcsLines();
+
+    void adjustCurves(const Point3d &temp,const Vector3d &dir)
+    {
+        int i;
+        GenerateDir* tempGenDir = hasOrient(temp, i);
+        if (tempGenDir)
+        {
+            if (*tempGenDir != dir)
+            {
+                tempGenDir->setDir(dir);
+                if (tempGenDir->is_Syntropy(dir))
+                    adjustGenerateCurves(i, dir,false);
+                else
+                    adjustGenerateCurves(i, dir,true);
+            }
+        }
+    }
+
+    void deleteAxisAndSplines(NXOpen::BlockStyler::CurveCollector* curvesSelect, NXOpen::BlockStyler::SpecifyOrientation* manipulator)
+    {
+        createEditLines(curvesSelect, manipulator);
+        deletePointerSet(m_generateDirs);
+        DELETE_VECTOR_OBJS(m_tempSplines);
+    }
+    void moveOper()
+    {
+        m_editLines->moveOper();
+    }
+    
+private:
+
+    void setCurvesCol(std::vector<CurveData*> &trimCurvesGroup, int col)
+    {
+        UF_INITIALIZE();
+        for (int i=0; i<trimCurvesGroup.size();i++)
+                UF_OBJ_set_color(trimCurvesGroup[i]->curve,col);
+    }
+
+    void createEditLines(NXOpen::BlockStyler::CurveCollector* curvesSelect, NXOpen::BlockStyler::SpecifyOrientation* manipulator)
+    {
+        m_editLines = new EditLines(m_trimCurveDataUP, m_trimCurveDataDW,curvesSelect,manipulator, m_cutDir);
+    }
+    GenerateDir* hasOrient(const Point3d& Orientation,int &index_)
+    {
+        m_index = 0;
+        for (index_=0;index_<m_generateDirs.size();index_++)
+        {
+            if ( *m_generateDirs[index_]==Orientation )
+            {
+                return m_generateDirs[index_];
+            }
+        }
+        return nullptr;
+    }
+
+    void  adjustGenerateCurves(int i, Vector3d genDir,bool isCoverUp=false)
+    {//m_trimCurveDataUP m_trimCurveDataDW
+        int count_;
+        int index_= BYTE_4(m_tempAssistCurves.size());
+        autoCloseAssistCurves(m_trimCurvesGroupUP[i], m_cutDir, 40, m_tempAssistCurves, genDir, isCoverUp? 0:1);
+        count_ = BYTE_4(m_tempAssistCurves.size() - index_);
+        for (int n=0;n<m_trimCurveDataUP[i].assist_->size(); n++)
+            DELETE_OBJ((*m_trimCurveDataUP[i].assist_)[n]->curve);
+        m_trimCurveDataUP[i].assist_->clear();
+        for (int j = 0; j < count_; j++)
+            m_trimCurveDataUP[i].assist_->push_back(m_tempAssistCurves[j + index_]);
+        setCurvesCol(*m_trimCurveDataUP[i].assist_,134);
+        index_ = BYTE_4(m_tempAssistCurves.size());
+        autoCloseAssistCurves(m_trimCurvesGroupDW[i], m_cutDir, 40, m_tempAssistCurves, genDir, isCoverUp ? 1 : 0);
+
+        count_ = BYTE_4(m_tempAssistCurves.size() - index_);
+        for (int n = 0; n < m_trimCurveDataDW[i].assist_->size(); n++)
+            DELETE_OBJ((*m_trimCurveDataDW[i].assist_)[n]->curve);
+        m_trimCurveDataDW[i].assist_->clear();
+        for (int j = 0; j < count_; j++)
+            m_trimCurveDataDW[i].assist_->push_back(m_tempAssistCurves[j + index_]);
+        setCurvesCol(*m_trimCurveDataDW[i].assist_, 134);
+    }
+    void deleteTempCDVSET()
+    {//用于编辑完辅助线后调用删除内存空间
+        if (m_tempCDVSET)
+        {
+            for (int i = 0; i < m_trimCurvesGroupUP.size(); i++)
+                delete[] m_tempCDVSET[i][0];
+            delete[] m_tempCDVSET;
+            m_tempCDVSET = nullptr;
+        }
+    }
+    void autoDirBing()
+    {
+        double magnitude;
+        double dirAngular[3];
+        deletePointerSet(m_generateDirs);
+        for (int i=0;i<m_trimCurvesGroupUP.size();i++)
+        {
+            if (MyFun::is_Equal(m_trimCurvesGroupUP[i][0]->vertexPt, m_trimCurvesGroupUP[i][1]->start_point, 0.001))
+                m_trimCurvesGroupUP[i][0]->swap();
+            UF_VEC3_unitize(m_trimCurvesGroupUP[i][0]->dir_Center, 0.000001, &magnitude, m_trimCurvesGroupUP[i][0]->dir_Center);
+            UF_VEC3_unitize(m_trimCurvesGroupUP[i].back()->dir_Center, 0.000001, &magnitude, m_trimCurvesGroupUP[i].back()->dir_Center);
+            int status;
+            UF_VEC3_is_parallel(m_trimCurvesGroupUP[i][0]->dir_Center, m_trimCurvesGroupUP[i].back()->dir_Center,0.001, &status);
+            if (status==0||m_trimCurvesGroupUP[i][0]->dir_Center == m_trimCurvesGroupUP[i].back()->dir_Center)
+            {
+                UF_VEC3_add(m_trimCurvesGroupUP[i][0]->dir_Center, m_trimCurvesGroupUP[i].back()->dir_Center, dirAngular);
+            }
+            else
+            {
+                UF_VEC3_cross(m_trimCurvesGroupUP[i][0]->dir_Center,m_cutDir,dirAngular);
+            }
+            m_generateDirs.push_back(new GenerateDir(dirAngular, m_trimCurvesGroupUP[i][0]->vertexPt));
+        }
+    }
+
+    template<class T>
+    void deletePointerSet(vector<T*>&temp);
+    bool hasSpline();
+    void simplifySpline();
+    void GenerateAssistLines();
+
+protected:
+    std::vector<CurveData*> m_tempTrimCurves;                      //need delete
+    std::vector<vector<CurveData*>> m_trimCurvesGroupUP;        //存指针需要delete，存对象不用delete
+    std::vector<vector<CurveData*>> m_trimCurvesGroupDW;
+
+    std::vector<GenerateDir*> m_generateDirs;
+    int m_index;
+
+    std::vector<tag_t> m_allTrimCurves;
+
+    std::vector<CurveData*> m_tempAssistCurves;                    //need delete 加入两条修边线
+    std::vector<vector<CurveData*>*> m_assistCurvesTempGroup;   //need delete!
+
+    std::vector<TrimCurveData> m_trimCurveDataUP;
+    std::vector<TrimCurveData> m_trimCurveDataDW;
+
+    std::vector<vector<CurveData*>> m_assistCurvesGroup;
+    std::vector<tag_t> m_tempSplines;
+
+
+    EditLines* m_editLines;
+    NXOpen::BlockStyler::CurveCollector* m_uiCurvesSelect; 
+    NXOpen::BlockStyler::SpecifyVector* m_uiCutDir;
+    vector<CurveData*>* m_tempCDVSET;
+    CurveAttrE m_attr;
+    CurveData* m_pCur_CD;
+    CurveData* m_pPost_CD;
+    CurveData m_editCD1;
+    CurveData m_editCD2;
+
+    Vector3d m_cutDir;
+    bool m_hasSpline;
+    int m_color;
+};
+#endif
