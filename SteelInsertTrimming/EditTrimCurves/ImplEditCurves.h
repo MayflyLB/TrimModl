@@ -477,7 +477,12 @@ public:
 
     void breakLineToTwo()
     {
-        if (m_status==0&&m_focusCurve1)
+        int num = 0;
+        for (int i=0;i<m_linearSet.size();i++)
+            for (int j = 0; j < m_linearSet[i].size(); j++)
+                if (m_linearSet[i][j])
+                    num++;
+        if (m_status==0&&m_focusCurve1&&num<18)
         {
             UF_CURVE_line_t lt = {0};
             UF_VEC3_copy(m_focusCurve1->retMidPt(), m_midPt);
@@ -506,6 +511,14 @@ public:
             m_pCurrentMovLines = nullptr;
             m_focusCurve1 = nullptr;
             setFlag();
+        }
+        else if(num>=18)
+        {
+            SHOW_INFO_USR("警告:超出插件限制,操作多次重复!");
+        }
+        else
+        {
+            SHOW_INFO_USR("警告:只能切断修边线,无法切断辅助线!");
         }
     }
 private:
@@ -801,21 +814,45 @@ public:
     ~ImplEditCurves(); 
     void sortedArcsLines();
 
-    void adjustCurves(const Point3d &temp,const Vector3d &dir)
+    void adjustCurves(const Point3d &temp, const Vector3d &dir, const Vector3d &alignmentDir, NXOpen::BlockStyler::SpecifyOrientation* ori = NULL)
     {
         int i;
         GenerateDir* tempGenDir = hasOrient(temp, i);
+        if (ori)
+        {
+            MyFun::CSolidObj tempobj(m_trimCurvesGroupUP[i][0]->curve);
+            for (int n=1;n<m_trimCurvesGroupUP[i].size();n++)
+                tempobj.adjustObject(m_trimCurvesGroupUP[i][n]->curve);
+            double originPt[3];
+            double Xdir[3] = {1.0,0.0,0.0};
+            double Ydir[3] = {0.0,1.0,0.0};
+            UF_VEC3_midpt(tempobj.m_topCenter, tempobj.m_bottomCenter, originPt);
+            ori->SetOrigin(originPt);
+            ori->SetXAxis(Xdir);
+            ori->SetYAxis(Xdir);
+            ori->SetEnable(true);
+        }
         if (tempGenDir)
         {
             if (*tempGenDir != dir)
             {
                 tempGenDir->setDir(dir);
                 if (tempGenDir->is_Syntropy(dir))
-                    adjustGenerateCurves(i, dir,false);
+                    adjustGenerateCurves(i, dir,false, alignmentDir);
                 else
-                    adjustGenerateCurves(i, dir,true);
+                    adjustGenerateCurves(i, dir,true, alignmentDir);
             }
         }
+    }
+    void adjustCurvesDir(const Point3d &temp, const Vector3d &dir, const Vector3d &alignmentDir)
+    {
+        int i;
+        GenerateDir* tempGenDir = hasOrient(temp, i);
+        tempGenDir->setDir(dir);
+        if (tempGenDir->is_Syntropy(dir))
+            adjustGenerateCurves(i, dir, false, alignmentDir);
+        else
+            adjustGenerateCurves(i, dir, true, alignmentDir);
     }
     void breakLineToTwo()
     {
@@ -870,7 +907,7 @@ private:
         return nullptr;
     }
 
-    void  adjustGenerateCurves(int i, Vector3d genDir,bool isCoverUp=false);
+    void  adjustGenerateCurves(int i, Vector3d genDir,bool isCoverUp=false, Vector3d alignmentDir = Vector3d(1.0, 0.0, 0.0));
     void deleteTempCDVSET()
     {//用于编辑完辅助线后调用删除内存空间
         if (m_tempCDVSET)

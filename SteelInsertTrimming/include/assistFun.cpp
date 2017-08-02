@@ -2604,7 +2604,7 @@ bool is_3DCurve(const vector<tag_t> &curves, double *dir3) //spline不在一个�
         return false;
 }
 
-void autoCloseAssistCurves(vector<CurveData*>& trimCurves,double *cut_dir, double width, vector<CurveData*>& assistLD, double *generateDir /*= NULL*/, int flag_type /*= 1*/)
+void autoCloseAssistCurves(vector<CurveData*>& trimCurves,double *cut_dir, double width, vector<CurveData*>& assistLD, double *generateDir /*= NULL*/, int flag_type /*= 1*/, Vector3d alignmentDir /*= Vector3d(1.0, 0.0, 0.0)*/)
 {
     UF_INITIALIZE();
     if (MyFun::is_Equal(trimCurves[0]->start_point, trimCurves.back()->end_point, 0.001))
@@ -2648,11 +2648,11 @@ void autoCloseAssistCurves(vector<CurveData*>& trimCurves,double *cut_dir, doubl
             if (len1 < len1_)
                 len1 = len1_;
         }
-        closeAssistCurve(vertexPts, cut_dir, width, len0, len1, flag_type, assistLD, generateDir);
+        closeAssistCurve(vertexPts, cut_dir, width, len0, len1, flag_type, assistLD, alignmentDir, generateDir);
     }
     else
     {
-        closeAssistCurve(vertexPts, cut_dir, width, 0, 0, flag_type, assistLD, generateDir);
+        closeAssistCurve(vertexPts, cut_dir, width, 0, 0, flag_type, assistLD, alignmentDir,generateDir);
     }
 }
 
@@ -2683,11 +2683,16 @@ void adjustLineData(tag_t &line, UF_CURVE_line_t& lt) //修编模块
     UF_terminate();
 }
 
-void closeAssistCurve(CurveData** tempCD, double dir[3], double width, double len0, double len1, int flag_type, vector<CurveData*>&assist,double * generateDir/*=NULL*/)
+void closeAssistCurve(CurveData** tempCD, double dir[3], double width, double len0, double len1, int flag_type, vector<CurveData*>&assist, double *alignmentDir, double * generateDir/*=NULL*/, double temp_angle)
 {
     width = width*1.2;
-    double dirX[3] = { 1,0,0 };
-    double dirY[3] = { 0,1,0 };
+    double *dirX = alignmentDir;
+    double dirY[3];
+    UF_VEC3_cross(dir, dirX, dirY);
+    double tempDist___;
+    UF_VEC3_unitize(dirX, 0.000001, &tempDist___, dirX);
+    UF_VEC3_unitize(dirY, 0.000001, &tempDist___, dirY);
+
     MyFun::VectorProjectInPlane(dir, dirX, dirX);
     MyFun::VectorProjectInPlane(dir, dirY, dirY);
 
@@ -2736,8 +2741,8 @@ void closeAssistCurve(CurveData** tempCD, double dir[3], double width, double le
     double angle1 = PI - MyFun::angleOfVectors(tempCD[1]->dir_Center, temp3D);//矫正角度
 
 
-    const double angle_Max = PI * 4 / 9;
-    const double angle_Max1 = PI * 5/ 9;
+    const double angle_Max = temp_angle;
+    const double angle_Max1 = PI- temp_angle;
     const double angle_Min = PI * 1 / 18;
     if (angle0 > angle_Max&& angle1 > angle_Max&&flag_type)//上模直接相连
     {

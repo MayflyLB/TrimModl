@@ -47,6 +47,7 @@ void EditTrimCurves::initialize_cb()
         curvesSelect = dynamic_cast<NXOpen::BlockStyler::CurveCollector*>(theDialog->TopBlock()->FindBlock("curvesSelect"));
         cutDir = dynamic_cast<NXOpen::BlockStyler::SpecifyVector*>(theDialog->TopBlock()->FindBlock("cutDir"));
         generateDir = dynamic_cast<NXOpen::BlockStyler::SpecifyVector*>(theDialog->TopBlock()->FindBlock("generateDir"));
+        alignmentDir = dynamic_cast<NXOpen::BlockStyler::SpecifyOrientation*>(theDialog->TopBlock()->FindBlock("alignmentDir"));
         generateDirIsOK = dynamic_cast<NXOpen::BlockStyler::Button*>(theDialog->TopBlock()->FindBlock("generateDirIsOK"));
         assistSelect = dynamic_cast<NXOpen::BlockStyler::CurveCollector*>(theDialog->TopBlock()->FindBlock("assistSelect"));
         cutButton = dynamic_cast<NXOpen::BlockStyler::Button*>(theDialog->TopBlock()->FindBlock("cutButton"));
@@ -85,7 +86,9 @@ void EditTrimCurves::initialize_cb()
 
 
         generateDir->SetShow(false);
+        alignmentDir->SetShow(false);
         generateDirIsOK->SetShow(false);
+
         assistSelect->SetShow(false);
         cutButton->SetShow(false);
         manipulator->SetShow(false);
@@ -120,24 +123,35 @@ int EditTrimCurves::update_cb(NXOpen::BlockStyler::UIBlock* block)
 
                 cutDir->SetShow(false);
                 curvesSelect->SetShow(false);
+
                 generateDir->SetShow(true);
+                alignmentDir->SetShow(true);
                 generateDirIsOK->SetShow(true);
+
                 generateDir->Focus();
             }
         }
         else if (block == generateDir)
         {
             UF_INITIALIZE();
-            m_implEdit->adjustCurves(generateDir->Point(), generateDir->Vector());
+            m_implEdit->adjustCurves(generateDir->Point(), generateDir->Vector(), Vector3d(1.0, 0.0, 0.0), alignmentDir);
+        }
+        else if (block == alignmentDir)
+        {
+            UF_INITIALIZE();
+            m_implEdit->adjustCurvesDir(generateDir->Point(), generateDir->Vector(), alignmentDir->XAxis());
         }
         else if (block == generateDirIsOK)
         {
             generateDir->SetEnable(false);
             generateDir->SetShow(false);
+            alignmentDir->SetShow(false);
             generateDirIsOK->SetShow(false);
+
             assistSelect->SetShow(true);
             cutButton->SetShow(true);
             manipulator->SetShow(true);
+
             assistSelect->Focus();
             m_implEdit->deleteAxisAndSplines(assistSelect, manipulator,linears);
         }

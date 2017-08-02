@@ -55,6 +55,7 @@ private:
     NXOpen::BlockStyler::CurveCollector* curvesSelect;// Block type: Curve Collector
     NXOpen::BlockStyler::SpecifyVector* cutDir;// Block type: Specify Vector
     NXOpen::BlockStyler::SpecifyVector* generateDir;// Block type: Specify Vector
+    NXOpen::BlockStyler::SpecifyOrientation* alignmentDir;// Block type: Specify Orientation
     NXOpen::BlockStyler::Button* generateDirIsOK;// Block type: Button
     NXOpen::BlockStyler::CurveCollector* assistSelect;// Block type: Curve Collector
     NXOpen::BlockStyler::Button* cutButton;// Block type: Button

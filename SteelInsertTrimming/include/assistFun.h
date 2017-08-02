@@ -153,7 +153,7 @@ void sortCurvesPointor(vector<CurveData*> tempDelete, vector<vector<CurveData*>>
 // Param: 	int flag_type 0包围生成 1直接闭合 
 // Param: 	vector<CurveData * > & assist
 //**********************************************
-void closeAssistCurve(CurveData** tempCD, double dir[3], double width, double len0, double len1, int flag_type, vector<CurveData*>&assist, double *generateDir = NULL);
+void closeAssistCurve(CurveData** tempCD, double dir[3], double width, double len0, double len1, int flag_type, vector<CurveData*>&assist,double *alignmentDir, double *generateDir = NULL, double temp_angle= PI * 4 / 9);
 
 
 
@@ -164,7 +164,7 @@ void closeAssistCurve(CurveData** tempCD, double dir[3], double width, double le
 // Param: 	double width
 // Param: 	vector<CurveData * > & assistLD
 // Param: 	int flag_type 0包围生成 1直接闭合 
-void autoCloseAssistCurves(vector<CurveData*>& trimCurves, double *cut_dir, double width, vector<CurveData*>& assistLD, double *generateDir=NULL,int flag_type = 1);
+void autoCloseAssistCurves(vector<CurveData*>& trimCurves, double *cut_dir, double width, vector<CurveData*>& assistLD, double *generateDir=NULL,int flag_type = 1,Vector3d alignmentDir= Vector3d(1.0,0.0,0.0) );
 
 
 
@@ -604,6 +604,7 @@ void roughOffsetCurves(const double dist, const bool is_dir, vector<tag_t> &temp
 // 
 // 	}
 // }
+
 typedef struct st_
 {
     tag_t *lineID;

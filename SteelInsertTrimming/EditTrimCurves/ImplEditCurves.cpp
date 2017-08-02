@@ -37,8 +37,6 @@ ImplEditCurves::~ImplEditCurves()
     
     deletePointerSet(m_assistCurvesTempGroup);
     DELETE_VECTOR_OBJS(m_tempSplines);
-    
-
 }
 
 void ImplEditCurves::sortedArcsLines()
@@ -71,12 +69,12 @@ void ImplEditCurves::sortedArcsLines()
     GenerateAssistLines();
 }
 
-void ImplEditCurves::adjustGenerateCurves(int i, Vector3d genDir, bool isCoverUp/*=false*/)
+void ImplEditCurves::adjustGenerateCurves(int i, Vector3d genDir, bool isCoverUp/*=false*/, Vector3d alignmentDir/* = Vector3d(1.0, 0.0, 0.0)*/)
 {
     //m_trimCurveDataUP m_trimCurveDataDW
     int count_;
     int index_ = BYTE_4(m_tempAssistCurves.size());
-    autoCloseAssistCurves(m_trimCurvesGroupUP[i], m_cutDir, 40, m_tempAssistCurves, genDir, isCoverUp ? 0 : 1);
+    autoCloseAssistCurves(m_trimCurvesGroupUP[i], m_cutDir, 40, m_tempAssistCurves, genDir, isCoverUp ? 0 : 1, alignmentDir);
     count_ = BYTE_4(m_tempAssistCurves.size() - index_);
     for (int n = 0; n < m_trimCurveDataUP[i].assist_->size(); n++)
         DELETE_OBJ((*m_trimCurveDataUP[i].assist_)[n]->curve);
@@ -85,7 +83,7 @@ void ImplEditCurves::adjustGenerateCurves(int i, Vector3d genDir, bool isCoverUp
         m_trimCurveDataUP[i].assist_->push_back(m_tempAssistCurves[j + index_]);
     setCurvesCol(*m_trimCurveDataUP[i].assist_, 134);
     index_ = BYTE_4(m_tempAssistCurves.size());
-    autoCloseAssistCurves(m_trimCurvesGroupDW[i], m_cutDir, 40, m_tempAssistCurves, genDir, isCoverUp ? 1 : 0);
+    autoCloseAssistCurves(m_trimCurvesGroupDW[i], m_cutDir, 40, m_tempAssistCurves, genDir, isCoverUp ? 1 : 0, alignmentDir);
 
     count_ = BYTE_4(m_tempAssistCurves.size() - index_);
     for (int n = 0; n < m_trimCurveDataDW[i].assist_->size(); n++)
